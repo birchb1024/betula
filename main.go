@@ -20,11 +20,17 @@ var cursorX int
 var cursorY int
 
 var boardMutex sync.RWMutex
-var noValues = map[rune]bool{' ': true, '.': true}
-var zeroValues = map[rune]bool{' ': true, '0': true, '.': true}
+var noValues = map[rune]bool{' ': true, '.': true, 0 : true}
+var zeroValues = map[rune]bool{' ': true, '0': true, '.': true, 0 : true}
 
 func nonValue(r rune) bool {
 	if _, ok := noValues[r]; ok {
+		return true
+	}
+	return false
+}
+func isZero(r rune) bool {
+	if _, ok := zeroValues[r]; ok {
 		return true
 	}
 	return false
@@ -45,25 +51,21 @@ func checkConstant(b board, x int, y int) {
 	}
 }
 
-func evalLeftRightWire(b board, x int, y int) {
+func evalLeftRightDiode(b board, x int, y int) {
 	boardMutex.Lock()
 	defer boardMutex.Unlock()
-	b[x][y] = '-'
+	b[x][y] = '>'
 	if nonValue(b[x-1][y+0]) && nonValue(b[x+1][y+0]) {
-		return
-	}
-	if nonValue(b[x-1][y+0]) {
-		b[x-1][y+0] = b[x+1][y+0]
 		return
 	}
 	b[x+1][y+0] = b[x-1][y+0]
 }
-func checkLeftRightWire(b board, x int, y int) {
+func checkLeftRightDiode(b board, x int, y int) {
 	boardMutex.Lock()
 	defer boardMutex.Unlock()
 	if b[x-1][y+0] != b[x+1][y+0] {
 		b[x][y] = '?'
-		errorMessage(b, fmt.Sprintf("'-' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
+		errorMessage(b, fmt.Sprintf("'>' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
 		return
 	}
 }
@@ -142,56 +144,165 @@ func errorMessage(b board, msg string) {
 		b[i][height-1] = r
 	}
 }
+type coord struct {x , y int}
+
+func propogate(visited board, b board,  p coord, value rune) {
+
+	if len(visited) >1 && nonValue(b[p.x][p.y]) { return }
+
+	switch b[p.x][p.y] {
+	case '*':
+		if visited[p.x][p.y] == 'Y' || visited[p.x][p.y+1] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		visited[p.x][p.y+1] = 'Y'
+		propogate(visited, b, coord{p.x + 1, p.y - 1}, b[p.x+1][p.y])
+		propogate(visited, b, coord{p.x + 2, p.y}, b[p.x+1][p.y])
+		propogate(visited, b, coord{p.x + 1, p.y + 1}, b[p.x+1][p.y])
+		propogate(visited, b, coord{p.x - 1, p.y}, b[p.x+1][p.y])
+	case '-':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		propogate(visited, b, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, coord{p.x - 1, p.y}, value)
+	case '>':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		propogate(visited, b, coord{p.x + 1, p.y}, value)
+	case '|':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		propogate(visited, b, coord{p.x, p.y - 1}, value)
+		propogate(visited, b, coord{p.x, p.y + 1}, value)
+	case '/':
+		var end int
+		for end = p.x+1; end < width; end++ {
+			if b[end][p.y] == '\\' {
+				break
+			}
+		}
+		if end == 0 {
+			return
+		}
+		if visited[p.x][p.y] == 'Y' || visited[end][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		visited[end][p.y] = 'Y'
+		propogate(visited, b, coord{end+1 , p.y}, value)
+		propogate(visited, b, coord{p.x-1 , p.y}, value)
+	case '\\':
+		var begin int
+		for begin = p.x-1; begin > 0; begin-- {
+			if b[begin][p.y] == '/' {
+				break
+			}
+		}
+		if begin == 0 {
+			return
+		}
+		if visited[p.x][p.y] == 'Y' || visited[begin][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		visited[begin][p.y] = 'Y'
+		propogate(visited, b, coord{begin-1 , p.y}, value)
+		propogate(visited, b, coord{p.x-1 , p.y}, value)
+	case '$':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		propogate(visited, b, coord{p.x , p.y-1}, value)
+		propogate(visited, b, coord{p.x , p.y+1}, value)
+		propogate(visited, b, coord{p.x+1 , p.y}, value)
+		propogate(visited, b, coord{p.x-1 , p.y}, value)
+	case 'L':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		visited[p.x][p.y-1] = 'Y'
+		b[p.x][p.y-1] = value
+		propogate(visited, b, coord{p.x+1 , p.y}, value)
+		propogate(visited, b, coord{p.x-1 , p.y}, value)
+	case 'R':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		visited[p.x][p.y-1] = 'Y'
+		b[p.x][p.y-1] = value
+	case 'e':
+		if b[p.x][p.y-1] != 'R' {
+			return
+		}
+		if isZero(b[p.x][p.y-2]) {
+			// Relay is OFF
+			propogate(visited, b, coord{p.x+1 , p.y+1}, value)
+			return
+		}
+		// Relay is ON
+		propogate(visited, b, coord{p.x+1, p.y}, value)
+	case 'l':
+		if b[p.x][p.y-2] != 'R' {
+			return
+		}
+		if isZero(b[p.x][p.y-3]) {
+			// Relay is OFF
+			propogate(visited, b, coord{p.x-1 , p.y-1}, value)
+			return
+		}
+	default:
+	}
+}
+
+
+
 func interpreter(b board) {
 	for {
+		boardMutex.Lock()
+		roots := make([]coord, 0)
+		visited := makeBoard(len(b), len(b[0]))
 		for y := 0; y < height; y++ {
 			for x := 0; x < width; x++ {
 				switch b[x][y] {
+				case 'L':
+					b[x][y-1] = ' '
 				case '*':
-					evalConstant(b, x, y)
-				case 'R':
-					evalRelay(b, x, y)
-				case '-':
-					evalLeftRightWire(b, x, y)
-				case '|':
-					evalUpDownWire(b, x, y)
+					roots = append(roots, coord{x,y})
 				default:
 				}
 			}
 		}
 
-		for y := height - 1; y > 0; y-- {
-			for x := width - 1; x > 0; x-- {
-				switch b[x][y] {
-				case '*':
-					evalConstant(b, x, y)
-				case 'R':
-					evalRelay(b, x, y)
-				case '-':
-					evalLeftRightWire(b, x, y)
-				case '|':
-					evalUpDownWire(b, x, y)
-				default:
-				}
-			}
+		for _, p := range roots {
+			propogate(visited, b, p, ' ')
 		}
 
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				switch b[x][y] {
-				case '*':
-					checkConstant(b, x, y)
-				case 'R':
-					// checkRelay(b, x, y)
-				case '-':
-					checkLeftRightWire(b, x, y)
-				case '|':
-					checkUpDownWire(b, x, y)
-				default:
-				}
-			}
-		}
-
+		//for y := 0; y < height; y++ {
+		//	for x := 0; x < width; x++ {
+		//		switch b[x][y] {
+		//		case '*':
+		//			checkConstant(b, x, y)
+		//		case 'R':
+		//			// checkRelay(b, x, y)
+		//		case '-':
+		//			checkLeftRightDiode(b, x, y)
+		//		case '|':
+		//			checkUpDownWire(b, x, y)
+		//		default:
+		//		}
+		//	}
+		//}
+		boardMutex.Unlock()
 		time.Sleep(50 * time.Millisecond)
 	}
 }
@@ -274,23 +385,29 @@ func loadFile(filename string, width int, height int) (board, error) {
 	}
 }
 
+func makeBoard(width int, height int) board {
+
+	b := make([][]rune, width)
+	for x := range b {
+		b[x] = make([]rune, height)
+	}
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			b[x][y] = ' '
+		}
+	}
+	return b
+}
+
+func (b board)setIfEmpty(x int, y int, r rune) {
+	if nonValue(b[x][y]) {
+		b[x][y] = r
+	}
+}
 func main() {
 	var theBoard board
 	filename := "untitled.betula"
-
-	if len(os.Args) > 1 {
-		filename = os.Args[1]
-		var err error
-		width, height, err = sizeOfFile(filename)
-		if err != nil {
-			log.Fatalf("ERROR: file %s - %s\n", os.Args[1], err)
-		}
-		theBoard, err = loadFile(filename, width, height)
-		if err != nil {
-			log.Fatalf("ERROR: file %s - %s\n", os.Args[1], err)
-		}
-
-	}
 
 	s, err := tcell.NewScreen()
 	if err != nil {
@@ -308,26 +425,27 @@ func main() {
 	s.Clear()
 
 	screenWidth, screenHeight := s.Size()
-
 	cursorX = screenWidth / 2
 	cursorY = screenHeight / 2
 
-	if filename == "untitled.betula" {
+	if len(os.Args) > 1 {
+		filename = os.Args[1]
+		var err error
+		width, height, err = sizeOfFile(filename)
+		if err != nil {
+			log.Fatalf("ERROR: file %s - %s\n", os.Args[1], err)
+		}
+		width = maxInt(width, screenWidth)
+		height = maxInt(height, screenHeight)
+		theBoard, err = loadFile(filename, width, height)
+		if err != nil {
+			log.Fatalf("ERROR: file %s - %s\n", os.Args[1], err)
+		}
+	} else {
 		width = screenWidth
 		height = screenHeight
-		// TODO constructor DRY
-		theBoard = make([][]rune, width)
-		for x := range theBoard {
-			theBoard[x] = make([]rune, height)
-		}
-
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				theBoard[x][y] = ' '
-			}
-		}
+		theBoard = makeBoard(width, height)
 	}
-
 	quit := func() {
 		s.Fini()
 		s.EnableMouse()
@@ -387,21 +505,13 @@ func main() {
 					//       3*.
 					//
 					theBoard[cursorX][cursorY] = '*'
-					theBoard[cursorX+1][cursorY] = '.'
-					theBoard[cursorX-1][cursorY] = '.'
+					theBoard.setIfEmpty(cursorX+1, cursorY, '.')
 				case '-':
-					//       .-.
-					//
 					theBoard[cursorX][cursorY] = '-'
-					theBoard[cursorX+1][cursorY] = '.'
-					theBoard[cursorX-1][cursorY] = '.'
 				case '|':
-					//       .
-					//       |
-					//       .
 					theBoard[cursorX][cursorY] = '|'
-					theBoard[cursorX][cursorY-1] = '.'
-					theBoard[cursorX][cursorY+1] = '.'
+				case '$':
+					theBoard[cursorX][cursorY] = '$'
 				case 'R':
 					//       .R.
 					//		 . .
@@ -410,10 +520,10 @@ func main() {
 					//
 					theBoard[cursorX][cursorY] = 'R'
 					for i := 0; i < 3; i++ {
-						theBoard[cursorX-1][cursorY+i] = '.'
+						theBoard.setIfEmpty(cursorX-1, cursorY+i, '.')
 					}
 					for i := 0; i < 4; i++ {
-						theBoard[cursorX+1][cursorY+i] = '.'
+						theBoard.setIfEmpty(cursorX+1, cursorY+i, '.')
 					}
 				default:
 					theBoard[cursorX][cursorY] = ev.Rune()
@@ -440,12 +550,9 @@ func view(s tcell.Screen, b board) {
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			s.SetContent(x, y, b[x][y], nil, tcell.StyleDefault)
-			//fmt.Printf("%3d ", m[x][y])
 		}
-		//fmt.Printf("\n")
 	}
 
-	//fmt.Printf("\n")
 	s.SetContent(cursorX, cursorY, b[cursorX][cursorY], nil, tcell.StyleDefault.Reverse(true))
 	boardMutex.Unlock()
 }
