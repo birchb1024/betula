@@ -162,11 +162,11 @@ func propogate(visited board, b board, p coord, value rune) {
 
 	switch b[p.x][p.y] {
 	case '*':
-		if visited[p.x][p.y] == 'Y' || visited[p.x][p.y+1] == 'Y' {
+		if visited[p.x][p.y] == 'Y' || visited[p.x+1][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		visited[p.x][p.y+1] = 'Y'
+		visited[p.x+1][p.y] = 'Y'
 		propogate(visited, b, coord{p.x + 1, p.y - 1}, b[p.x+1][p.y])
 		propogate(visited, b, coord{p.x + 2, p.y}, b[p.x+1][p.y])
 		propogate(visited, b, coord{p.x + 1, p.y + 1}, b[p.x+1][p.y])
@@ -208,7 +208,7 @@ func propogate(visited board, b board, p coord, value rune) {
 		propogate(visited, b, coord{p.x, p.y - 1}, value)
 		propogate(visited, b, coord{p.x, p.y + 1}, value)
 	case 'N':
-		if visited[p.x+1][p.y] == 'Y' {
+		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
@@ -222,25 +222,7 @@ func propogate(visited board, b board, p coord, value rune) {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		b[p.x+1][p.y] = value
-		if b[p.x][p.y+2] == 'v' {
-			propogate(visited, b, coord{p.x, p.y + 2}, value)
-		}
-	case '%':
-		if visited[p.x][p.y] == 'Y' {
-			return
-		}
-		visited[p.x][p.y] = 'Y'
-		b[p.x+1][p.y] = value
-		if b[p.x][p.y+2] == 'v' {
-			propogate(visited, b, coord{p.x, p.y + 2}, value)
-		}
-	case 'W':
-		if visited[p.x][p.y] == 'Y' {
-			return
-		}
-		visited[p.x][p.y] = 'Y'
-		if isZero(b[p.x+1][p.y-1]) {
+		if isZero(b[p.x][p.y-1]) {
 			return
 		}
 		propogate(visited, b, coord{p.x - 1, p.y}, value)
@@ -297,15 +279,25 @@ func propogate(visited board, b board, p coord, value rune) {
 		b[p.x][p.y-1] = value
 		propogate(visited, b, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, coord{p.x - 1, p.y}, value)
+	case 'J':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		visited[p.x][p.y+1] = 'Y'
+		b[p.x][p.y+1] = value
+		propogate(visited, b, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, coord{p.x - 1, p.y}, value)
 	default:
 	}
 }
 
 func interpreter(b board) {
+	var visited board
 	for {
 		boardMutex.Lock()
 		roots := make([]coord, 0)
-		visited := makeBoard(len(b), len(b[0]))
+		visited = makeBoard(len(b), len(b[0]))
 		for y := 0; y < height; y++ {
 			for x := 0; x < width; x++ {
 				switch b[x][y] {
@@ -324,6 +316,16 @@ func interpreter(b board) {
 			propogate(visited, b, p, ' ')
 		}
 
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				if visited[x][y] != 'Y' {
+					if b[x][y] >= '0' && b[x][y] <= '9' {
+						b[x][y] = ' '
+					}
+
+				}
+			}
+		}
 		//for y := 0; y < height; y++ {
 		//for y := 0; y < height; y++ {
 		//	for x := 0; x < width; x++ {
@@ -431,11 +433,11 @@ func saveFile(b board, filename string) {
 		return
 	}
 	defer func(fd *os.File) { _ = fd.Close() }(fd)
-	for y := 0; y < len(b[0])-1 ; y++ {
+	for y := 0; y < len(b[0])-1; y++ {
 		for x := 0; x < len(b); x++ {
 			r := b[x][y]
 			if r == 0 {
-				r =' '
+				r = ' '
 			}
 			_, err := fmt.Fprintf(fd, "%c", r)
 			if err != nil {
@@ -588,15 +590,65 @@ func setRightSideMsg(b board, msg string) {
 	}
 }
 
+var colors = map[rune]tcell.Color{
+	'-':  tcell.ColorLightBlue,
+	'|':  tcell.ColorLightBlue,
+	'/':  tcell.ColorLightBlue,
+	'\\': tcell.ColorLightBlue,
+	'$':  tcell.ColorBlue,
+	'L':  tcell.ColorBlack,
+	'J':  tcell.ColorBlack,
+	'N':  tcell.ColorBlue,
+	'*':  tcell.ColorBlack,
+	'C':  tcell.ColorDarkBlue,
+	'S':  tcell.ColorBlack,
+
+	'0': tcell.ColorRed,
+	'1': tcell.ColorOrange,
+	'2': tcell.ColorOrange,
+	'3': tcell.ColorOrange,
+	'4': tcell.ColorOrange,
+	'5': tcell.ColorOrange,
+	'6': tcell.ColorOrange,
+	'7': tcell.ColorOrange,
+	'8': tcell.ColorOrange,
+	'9': tcell.ColorOrange,
+}
+var backgrounds = map[rune]tcell.Color{
+	'$': tcell.ColorLightBlue,
+	'J': tcell.ColorLightBlue,
+	'L': tcell.ColorLightBlue,
+	'N': tcell.ColorLightPink,
+	'S': tcell.ColorLightPink,
+	'C': tcell.ColorLightGreen,
+	'*': tcell.ColorLightGreen,
+}
+
+func styleOf(r rune) tcell.Style {
+	var s tcell.Style = tcell.StyleDefault
+	if c, ok := colors[r]; ok {
+		s = s.Foreground(c)
+	}
+	if c, ok := backgrounds[r]; ok {
+		s = s.Background(c)
+	}
+	if r == '*' {
+		s = s.Bold(true)
+	}
+	return s
+
+}
 func view(s tcell.Screen, b board) {
 	boardMutex.Lock()
 
-	for y := 0; y < height; y++ {
+	for y := 0; y < height-1; y++ {
 		for x := 0; x < width; x++ {
-			s.SetContent(x, y, b[x][y], nil, tcell.StyleDefault)
+			s.SetContent(x, y, b[x][y], nil, styleOf(b[x][y]))
 		}
 	}
-
+	for x := 0; x < width; x++ {
+		s.SetContent(x, height-1, b[x][height-1], nil, tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorBlack))
+	}
 	s.SetContent(cursorX, cursorY, b[cursorX][cursorY], nil, tcell.StyleDefault.Reverse(true))
 	boardMutex.Unlock()
 }
