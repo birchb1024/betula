@@ -35,6 +35,12 @@ func isZero(r rune) bool {
 	}
 	return false
 }
+func isDigit(r rune) bool {
+	if r >= '0' && r <= '9' {
+		return true
+	}
+	return false
+}
 func cond(control, yes, no rune) rune {
 	if isZero(control) {
 		return no
@@ -42,113 +48,31 @@ func cond(control, yes, no rune) rune {
 	return yes
 }
 
-func evalConstant(b board, x int, y int) {
-	boardMutex.Lock()
-	defer boardMutex.Unlock()
-	b[x+1][y] = b[x-1][y]
-	b[x][y] = '*'
-}
 func checkConstant(b board, x int, y int) {
-	boardMutex.Lock()
-	defer boardMutex.Unlock()
 	if b[x-1][y+0] != b[x+1][y+0] {
 		b[x][y] = '?'
-		errorMessage(b, fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
+		setMiddleMsg(b, fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
 		return
 	}
 }
 
-func evalLeftRightDiode(b board, x int, y int) {
-	boardMutex.Lock()
-	defer boardMutex.Unlock()
-	b[x][y] = '>'
-	if nonValue(b[x-1][y+0]) && nonValue(b[x+1][y+0]) {
-		return
-	}
-	b[x+1][y+0] = b[x-1][y+0]
-}
-func checkLeftRightDiode(b board, x int, y int) {
-	boardMutex.Lock()
-	defer boardMutex.Unlock()
-	if b[x-1][y+0] != b[x+1][y+0] {
+func checkLeftRightWire(b board, x int, y int) {
+	if b[x-1][y] != b[x+1][y] {
 		b[x][y] = '?'
-		errorMessage(b, fmt.Sprintf("'>' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
+		setMiddleMsg(b, fmt.Sprintf("'>' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
 		return
 	}
 }
 
-func evalUpDownWire(b board, x int, y int) {
-	boardMutex.Lock()
-	defer boardMutex.Unlock()
-	b[x][y] = '|'
-	if nonValue(b[x][y-1]) && nonValue(b[x][y+1]) {
-		return
-	}
-	if nonValue(b[x][y-1]) {
-		b[x][y-1] = b[x][y+1]
-		return
-	}
-	b[x][y+1] = b[x][y-1]
-}
 func checkUpDownWire(b board, x int, y int) {
-	boardMutex.Lock()
-	defer boardMutex.Unlock()
 	if len(b) != width || len(b[x]) != height {
 		_, _ = fmt.Fprintf(os.Stderr, "checkUpDownWire %d %d\n", len(b), y)
 	}
-	errorMessage(b, fmt.Sprintf("checkUpDownWire %d %d", x, y))
+	setMiddleMsg(b, fmt.Sprintf("checkUpDownWire %d %d", x, y))
 	if b[x][y-1] != b[x][y+1] {
 		b[x][y] = '?'
-		errorMessage(b, fmt.Sprintf("'|' short circuit at %d %d: '%c' != '%c'", x, y, b[x][y-1], b[x][y+1]))
+		setMiddleMsg(b, fmt.Sprintf("'|' short circuit at %d %d: '%c' != '%c'", x, y, b[x][y-1], b[x][y+1]))
 		return
-	}
-}
-
-func evalRelay(b board, x int, y int) {
-	boardMutex.Lock()
-	defer boardMutex.Unlock()
-	in := b[x-1][y]
-	b[x][y] = 'R'
-	if in == '0' || in == ' ' || in == '.' {
-		// Relay is OFF
-		b[x+1][y+1] = b[x-1][y+1]
-		b[x+1][y+3] = b[x-1][y+2]
-		b[x+1][y+0] = '.'
-		b[x+1][y+2] = '.'
-		return
-	}
-	// Relay is ON
-	b[x+1][y+0] = b[x-1][y+1]
-	b[x+1][y+2] = b[x-1][y+2]
-	b[x+1][y+1] = '.'
-	b[x+1][y+3] = '.'
-}
-func checkRelay(b board, x int, y int) bool {
-	in := b[x-1][y]
-	if _, ok := zeroValues[in]; ok {
-		// Relay is OFF
-		if b[x+1][y+1] == b[x-1][y+1] &&
-			b[x+1][y+3] == b[x-1][y+2] {
-			return true // OK
-		}
-		b[x][y] = '?'
-		errorMessage(b, fmt.Sprintf("Relay constraint failure at %d %d", x, y))
-		return false
-	}
-	// Relay is ON
-	if b[x+1][y+0] == b[x-1][y+1] &&
-		b[x+1][y+2] == b[x-1][y+2] {
-		return true // OK
-	}
-	b[x][y] = '?'
-	errorMessage(b, fmt.Sprintf("Relay constraint failure at %d %d", x, y))
-	return false
-}
-
-func errorMessage(b board, msg string) {
-	runes := []rune(msg)
-	for i, r := range runes {
-		b[i][height-1] = r
 	}
 }
 
@@ -156,27 +80,55 @@ type coord struct{ x, y int }
 
 func propogate(visited board, b board, p coord, value rune) {
 
+	if p.x >= len(b) || p.y >= len(b[0]) {
+		return
+	}
 	if len(visited) > 1 && nonValue(b[p.x][p.y]) {
 		return
 	}
 
 	switch b[p.x][p.y] {
 	case '*':
-		if visited[p.x][p.y] == 'Y' || visited[p.x+1][p.y] == 'Y' {
+		//               .
+		//              3*.
+		//               .
+		if visited[p.x][p.y] == 'Y' || visited[p.x-1][p.y] == 'Y' {
+			if value != b[p.x-1][p.y] {
+				setMiddleMsg(b, fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
+			}
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		visited[p.x+1][p.y] = 'Y'
-		propogate(visited, b, coord{p.x + 1, p.y - 1}, b[p.x+1][p.y])
-		propogate(visited, b, coord{p.x + 2, p.y}, b[p.x+1][p.y])
-		propogate(visited, b, coord{p.x + 1, p.y + 1}, b[p.x+1][p.y])
-		propogate(visited, b, coord{p.x - 1, p.y}, b[p.x+1][p.y])
+		visited[p.x-1][p.y] = 'Y'
+		constant := b[p.x-1][p.y]
+		propogate(visited, b, coord{p.x, p.y + 1}, constant)
+		propogate(visited, b, coord{p.x + 1, p.y}, constant)
+		propogate(visited, b, coord{p.x, p.y - 1}, constant)
+
 	case 'C':
+		modulo := 2
+		fraction := 10
+		if isDigit(b[p.x-1][p.y]) {
+			modulo = int(b[p.x-1][p.y] - '0')
+			if modulo == 0 {
+				modulo = 10
+			}
+			if isDigit(b[p.x-2][p.y]) {
+				fraction = int(b[p.x-2][p.y] - '0')
+				if fraction == 0 {
+					fraction = 10
+				}
+			}
+		}
+		divisor := 100 * fraction
+		milliSeconds := time.Now().Second()*1000 + time.Now().Nanosecond()/1000000
+		clock := '0' + rune((milliSeconds/divisor)%modulo)
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		clock := '0' + rune(time.Now().Second()%2)
+		visited[p.x-1][p.y] = 'Y'
+		visited[p.x-2][p.y] = 'Y'
 		propogate(visited, b, coord{p.x, p.y - 1}, clock)
 		propogate(visited, b, coord{p.x, p.y + 1}, clock)
 		propogate(visited, b, coord{p.x - 1, p.y}, clock)
@@ -298,7 +250,8 @@ func interpreter(b board) {
 		boardMutex.Lock()
 		roots := make([]coord, 0)
 		visited = makeBoard(len(b), len(b[0]))
-		for y := 0; y < height; y++ {
+		// Find roots
+		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
 				switch b[x][y] {
 				case 'L':
@@ -316,7 +269,8 @@ func interpreter(b board) {
 			propogate(visited, b, p, ' ')
 		}
 
-		for y := 0; y < height; y++ {
+		// Clear numeric values not reachable from roots
+		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
 				if visited[x][y] != 'Y' {
 					if b[x][y] >= '0' && b[x][y] <= '9' {
@@ -326,22 +280,6 @@ func interpreter(b board) {
 				}
 			}
 		}
-		//for y := 0; y < height; y++ {
-		//for y := 0; y < height; y++ {
-		//	for x := 0; x < width; x++ {
-		//		switch b[x][y] {
-		//		case '*':
-		//			checkConstant(b, x, y)
-		//		case 'R':
-		//			// checkRelay(b, x, y)
-		//		case '-':
-		//			checkLeftRightDiode(b, x, y)
-		//		case '|':
-		//			checkUpDownWire(b, x, y)
-		//		default:
-		//		}
-		//	}
-		//}
 		boardMutex.Unlock()
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -350,7 +288,7 @@ func interpreter(b board) {
 func render(s tcell.Screen, b board) {
 	for {
 		boardMutex.Lock()
-		setRightSideMsg(b, fmt.Sprintf("%3d %3d", cursorX, cursorY))
+		setLeftMsg(b, fmt.Sprintf("%3d %3d", cursorX, cursorY))
 		boardMutex.Unlock()
 		view(s, b)
 		s.Show()
@@ -409,7 +347,7 @@ func loadFile(filename string, width int, height int) (board, error) {
 	for {
 		r, _, err := rdr.ReadRune()
 		if err == io.EOF {
-			setRightSideMsg(b, filename)
+			setMiddleMsg(b, fmt.Sprintf("Loaded %s, into width %d, height %d", filename, width, height))
 			return b, nil
 		}
 		if err != nil {
@@ -429,29 +367,45 @@ func saveFile(b board, filename string) {
 
 	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		errorMessage(b, err.Error())
+		setMiddleMsg(b, err.Error())
 		return
 	}
 	defer func(fd *os.File) { _ = fd.Close() }(fd)
+
+	var actualWidth = 0
+	var actualHeight = 0
 	for y := 0; y < len(b[0])-1; y++ {
+		var maxX = 0
 		for x := 0; x < len(b); x++ {
+			if !isZero(b[x][y]) {
+				maxX = x
+			}
+		}
+		if maxX != 0 {
+			actualHeight = y
+		}
+		actualWidth = maxInt(actualWidth, maxX)
+	}
+
+	for y := 0; y <= actualHeight; y++ {
+		for x := 0; x <= actualWidth; x++ {
 			r := b[x][y]
 			if r == 0 {
 				r = ' '
 			}
 			_, err := fmt.Fprintf(fd, "%c", r)
 			if err != nil {
-				errorMessage(b, err.Error())
+				setMiddleMsg(b, err.Error())
 				return
 			}
 		}
 		_, err = fmt.Fprintf(fd, "\n")
 		if err != nil {
-			errorMessage(b, err.Error())
+			setMiddleMsg(b, err.Error())
 			return
 		}
 	}
-	errorMessage(b, "Saved                           ")
+	setMiddleMsg(b, fmt.Sprintf("Saved %s, width %d, height %d", filename, actualWidth, actualHeight))
 
 }
 
@@ -495,18 +449,20 @@ func main() {
 	s.Clear()
 
 	screenWidth, screenHeight := s.Size()
+	_, _ = fmt.Fprintf(os.Stderr, "screenWidth %d, screenHeight %d\n", screenWidth, screenHeight)
 	cursorX = screenWidth / 2
 	cursorY = screenHeight / 2
 
 	if len(os.Args) > 1 {
 		filename = os.Args[1]
 		var err error
-		width, height, err = sizeOfFile(filename)
+		fileWidth, fileHeight, err := sizeOfFile(filename)
 		if err != nil {
 			log.Fatalf("ERROR: file %s - %s\n", os.Args[1], err)
 		}
-		width = maxInt(width, screenWidth)
-		height = maxInt(height, screenHeight)
+		_, _ = fmt.Fprintf(os.Stderr, "fileWidth %d, fileHeight %d\n", fileWidth, fileHeight)
+		width = maxInt(fileWidth, screenWidth)
+		height = maxInt(fileHeight, screenHeight)
 		theBoard, err = loadFile(filename, width, height)
 		if err != nil {
 			log.Fatalf("ERROR: file %s - %s\n", os.Args[1], err)
@@ -583,25 +539,20 @@ func main() {
 	}
 }
 
-func setRightSideMsg(b board, msg string) {
-	runes := []rune(msg)
-	for i, r := range runes {
-		b[width-1-len(runes)+i][height-1] = r
-	}
-}
-
 var colors = map[rune]tcell.Color{
 	'-':  tcell.ColorLightBlue,
 	'|':  tcell.ColorLightBlue,
 	'/':  tcell.ColorLightBlue,
 	'\\': tcell.ColorLightBlue,
 	'$':  tcell.ColorBlue,
-	'L':  tcell.ColorBlack,
-	'J':  tcell.ColorBlack,
-	'N':  tcell.ColorBlue,
-	'*':  tcell.ColorBlack,
-	'C':  tcell.ColorDarkBlue,
-	'S':  tcell.ColorBlack,
+	'?':  tcell.ColorRed,
+
+	'L': tcell.ColorBlack,
+	'J': tcell.ColorBlack,
+	'N': tcell.ColorBlue,
+	'*': tcell.ColorBlack,
+	'C': tcell.ColorDarkBlue,
+	'S': tcell.ColorBlack,
 
 	'0': tcell.ColorRed,
 	'1': tcell.ColorOrange,
@@ -625,7 +576,7 @@ var backgrounds = map[rune]tcell.Color{
 }
 
 func styleOf(r rune) tcell.Style {
-	var s tcell.Style = tcell.StyleDefault
+	var s = tcell.StyleDefault
 	if c, ok := colors[r]; ok {
 		s = s.Foreground(c)
 	}
@@ -638,6 +589,23 @@ func styleOf(r rune) tcell.Style {
 	return s
 
 }
+
+func setMiddleMsg(b board, msg string) {
+	runes := []rune(msg)
+	for i, r := range runes {
+		b[i+20][height-1] = r
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
+}
+
+func setLeftMsg(b board, msg string) {
+	runes := []rune(msg)
+	for i, r := range runes {
+		b[i][height-1] = r
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
+}
+
 func view(s tcell.Screen, b board) {
 	boardMutex.Lock()
 
@@ -647,7 +615,7 @@ func view(s tcell.Screen, b board) {
 		}
 	}
 	for x := 0; x < width; x++ {
-		s.SetContent(x, height-1, b[x][height-1], nil, tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorBlack))
+		s.SetContent(x, height-1, b[x][height-1], nil, tcell.StyleDefault)
 	}
 	s.SetContent(cursorX, cursorY, b[cursorX][cursorY], nil, tcell.StyleDefault.Reverse(true))
 	boardMutex.Unlock()
