@@ -49,34 +49,6 @@ func cond(control, yes, no rune) rune {
 	return yes
 }
 
-func checkConstant(b board, x int, y int) {
-	if b[x-1][y+0] != b[x+1][y+0] {
-		b[x][y] = '?'
-		setMiddleMsg(b, fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
-		return
-	}
-}
-
-func checkLeftRightWire(b board, x int, y int) {
-	if b[x-1][y] != b[x+1][y] {
-		b[x][y] = '?'
-		setMiddleMsg(b, fmt.Sprintf("'>' short circuit at %d %d: '%c' != '%c'", x, y, b[x-1][y+0], b[x+1][y+0]))
-		return
-	}
-}
-
-func checkUpDownWire(b board, x int, y int) {
-	if len(b) != width || len(b[x]) != height {
-		_, _ = fmt.Fprintf(os.Stderr, "checkUpDownWire %d %d\n", len(b), y)
-	}
-	setMiddleMsg(b, fmt.Sprintf("checkUpDownWire %d %d", x, y))
-	if b[x][y-1] != b[x][y+1] {
-		b[x][y] = '?'
-		setMiddleMsg(b, fmt.Sprintf("'|' short circuit at %d %d: '%c' != '%c'", x, y, b[x][y-1], b[x][y+1]))
-		return
-	}
-}
-
 type coord struct{ x, y int }
 
 func propogate(visited board, b board, p coord, value rune) {
@@ -165,18 +137,6 @@ func propogate(visited board, b board, p coord, value rune) {
 		visited[p.x][p.y] = 'Y'
 		propogate(visited, b, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, coord{p.x - 1, p.y}, value)
-	case '>':
-		if visited[p.x][p.y] == 'Y' {
-			return
-		}
-		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
-	case '<':
-		if visited[p.x][p.y] == 'Y' {
-			return
-		}
-		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
 	case '|':
 		if visited[p.x][p.y] == 'Y' {
 			return
@@ -184,26 +144,6 @@ func propogate(visited board, b board, p coord, value rune) {
 		visited[p.x][p.y] = 'Y'
 		propogate(visited, b, coord{p.x, p.y - 1}, value)
 		propogate(visited, b, coord{p.x, p.y + 1}, value)
-	case 'N':
-		if visited[p.x][p.y] == 'Y' {
-			return
-		}
-		visited[p.x][p.y] = 'Y'
-		inverted := cond(value, '0', '1')
-		propogate(visited, b, coord{p.x, p.y - 1}, inverted)
-		propogate(visited, b, coord{p.x, p.y + 1}, inverted)
-		propogate(visited, b, coord{p.x + 1, p.y}, inverted)
-		propogate(visited, b, coord{p.x - 1, p.y}, inverted)
-	case 'S':
-		if visited[p.x][p.y] == 'Y' {
-			return
-		}
-		visited[p.x][p.y] = 'Y'
-		if isZero(b[p.x][p.y-1]) {
-			return
-		}
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
 	case '/':
 		var end int
 		for end = p.x + 1; end < width; end++ {
@@ -247,6 +187,42 @@ func propogate(visited board, b board, p coord, value rune) {
 		propogate(visited, b, coord{p.x, p.y + 1}, value)
 		propogate(visited, b, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, coord{p.x - 1, p.y}, value)
+	// Diode
+	case '>':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		propogate(visited, b, coord{p.x + 1, p.y}, value)
+	// Diode
+	case '<':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		propogate(visited, b, coord{p.x - 1, p.y}, value)
+	// Invert
+	case 'N':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		inverted := cond(value, '0', '1')
+		propogate(visited, b, coord{p.x, p.y - 1}, inverted)
+		propogate(visited, b, coord{p.x, p.y + 1}, inverted)
+		propogate(visited, b, coord{p.x + 1, p.y}, inverted)
+		propogate(visited, b, coord{p.x - 1, p.y}, inverted)
+	// Switch
+	case 'S':
+		if visited[p.x][p.y] == 'Y' {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		if isZero(b[p.x][p.y-1]) {
+			return
+		}
+		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, coord{p.x + 1, p.y}, value)
 	case 'L':
 		if visited[p.x][p.y] == 'Y' {
 			return
@@ -265,6 +241,24 @@ func propogate(visited board, b board, p coord, value rune) {
 		b[p.x][p.y+1] = value
 		propogate(visited, b, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, coord{p.x - 1, p.y}, value)
+	// Equals
+	case '=':
+		if visited[p.x][p.y] != 'Y' {
+			b[p.x-1][p.y-1] = value
+			visited[p.x][p.y] = 'Y'
+			visited[p.x-1][p.y-1] = 'Y'
+			return
+		}
+		if visited[p.x-1][p.y+1] == 'Y' {
+			return
+		}
+		b[p.x-1][p.y+1] = value
+		visited[p.x-1][p.y+1] = 'Y'
+		if b[p.x-1][p.y-1] == value {
+			propogate(visited, b, coord{p.x + 1, p.y}, '1')
+			return
+		}
+		propogate(visited, b, coord{p.x + 1, p.y}, '0')
 	default:
 	}
 }
