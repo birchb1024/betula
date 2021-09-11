@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gdamore/tcell"
 	"io"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -105,6 +106,30 @@ func propogate(visited board, b board, p coord, value rune) {
 		propogate(visited, b, coord{p.x + 1, p.y}, constant)
 		propogate(visited, b, coord{p.x, p.y - 1}, constant)
 
+	case 'R':
+		//               .
+		//              3R.
+		//               .
+		if visited[p.x][p.y] == 'Y' || visited[p.x-1][p.y] == 'Y' {
+			if value != b[p.x-1][p.y] {
+				setMiddleMsg(b, fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
+			}
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		visited[p.x-1][p.y] = 'Y'
+		maxr := 1
+		if isDigit(b[p.x-1][p.y]) {
+			maxr = int(b[p.x-1][p.y] - '0')
+			if maxr == 0 {
+				maxr = 1
+			}
+		}
+		randi := '0' + rune(rand.Intn(maxr))
+		propogate(visited, b, coord{p.x, p.y + 1}, randi)
+		propogate(visited, b, coord{p.x + 1, p.y}, randi)
+		propogate(visited, b, coord{p.x, p.y - 1}, randi)
+
 	case 'C':
 		modulo := 2
 		fraction := 10
@@ -146,12 +171,12 @@ func propogate(visited board, b board, p coord, value rune) {
 		}
 		visited[p.x][p.y] = 'Y'
 		propogate(visited, b, coord{p.x + 1, p.y}, value)
-	case 'v':
+	case '<':
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x, p.y + 1}, value)
+		propogate(visited, b, coord{p.x - 1, p.y}, value)
 	case '|':
 		if visited[p.x][p.y] == 'Y' {
 			return
@@ -259,6 +284,8 @@ func interpreter(b board) {
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
+					roots = append(roots, coord{x, y})
+				case 'R':
 					roots = append(roots, coord{x, y})
 				default:
 				}
@@ -507,6 +534,13 @@ func main() {
 				boardMutex.Lock()
 				theBoard[cursorX][cursorY] = ' '
 				boardMutex.Unlock()
+			case tcell.KeyBackspace2:
+				if cursorX > 0 {
+					cursorX -= 1
+				}
+				boardMutex.Lock()
+				theBoard[cursorX][cursorY] = ' '
+				boardMutex.Unlock()
 			case tcell.KeyUp:
 				if cursorY != 0 {
 					cursorY -= 1
@@ -531,6 +565,7 @@ func main() {
 				boardMutex.Lock()
 				theBoard[cursorX][cursorY] = ev.Rune()
 				boardMutex.Unlock()
+				cursorX += 1
 			default:
 			}
 		case *tcell.EventMouse:
