@@ -21,8 +21,8 @@ var cursorX int
 var cursorY int
 
 var boardMutex sync.RWMutex
-var noValues = map[rune]bool{' ': true, '.': true, 0: true}
-var zeroValues = map[rune]bool{' ': true, '0': true, '.': true, 0: true}
+var noValues = map[rune]bool{' ': true, 0: true}
+var zeroValues = map[rune]bool{' ': true, '0': true, 0: true}
 
 func nonValue(r rune) bool {
 	if _, ok := noValues[r]; ok {
@@ -47,6 +47,13 @@ func cond(control, yes, no rune) rune {
 		return no
 	}
 	return yes
+}
+
+func toBinary(x rune) rune {
+	if isZero(x) {
+		return '0'
+	}
+	return '1'
 }
 
 type coord struct{ x, y int }
@@ -186,6 +193,13 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		propogate(visited, b, p, coord{p.x, p.y + 1}, value)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
+	// Buffer left->right
+	case '~':
+		if visited[p.x][p.y] == 'Y' || f.x != p.x-1 || f.y != p.y {
+			return
+		}
+		visited[p.x][p.y] = 'Y'
+		propogate(visited, b, p, coord{p.x + 1, p.y}, toBinary(value))
 	// Diode
 	case '>':
 		if visited[p.x][p.y] == 'Y' {
@@ -271,34 +285,76 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		b[p.x][p.y+1] = value
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
-	case '=':
-		// Equals
-		//    ..
-		//    .=
-		//    ..
 
-		if f.x == p.x && f.y == p.y-1 {
-			b[p.x-1][p.y-1] = value
-			visited[p.x-1][p.y-1] = 'Y'
+	//       ..
+	//       .=.
+	//       ..
+	//
+
+	case '=':
+		equals := func() bool {
+			return b[p.x-1][p.y-1] == b[p.x-1][p.y+1]
 		}
-		if f.x == p.x && f.y == p.y+1 {
-			b[p.x-1][p.y+1] = value
-			visited[p.x-1][p.y+1] = 'Y'
+		logicGate(visited, b, f, p, value, equals)
+	case '.':
+		and := func() bool {
+			A := !isZero(b[p.x-1][p.y-1])
+			B := !isZero(b[p.x-1][p.y+1])
+			return A && B
 		}
-		if visited[p.x-1][p.y+1] != 'Y' || visited[p.x-1][p.y-1] != 'Y' {
-			return
+		logicGate(visited, b, f, p, value, and)
+	case '+':
+		or := func() bool {
+			A := !isZero(b[p.x-1][p.y-1])
+			B := !isZero(b[p.x-1][p.y+1])
+			return A || B
 		}
-		if b[p.x-1][p.y-1] == b[p.x-1][p.y+1] {
-			b[p.x-1][p.y] = '1'
-			visited[p.x-1][p.y] = 'Y'
-			propogate(visited, b, p, coord{p.x + 1, p.y}, '1')
-			return
+		logicGate(visited, b, f, p, value, or)
+	case '@':
+		exclusiveOr := func() bool {
+			A := !isZero(b[p.x-1][p.y-1])
+			B := !isZero(b[p.x-1][p.y+1])
+			return A != B
 		}
-		b[p.x-1][p.y] = '0'
-		visited[p.x-1][p.y] = 'Y'
-		propogate(visited, b, p, coord{p.x + 1, p.y}, '0')
+		logicGate(visited, b, f, p, value, exclusiveOr)
+	case '^':
+		nand := func() bool {
+			A := !isZero(b[p.x-1][p.y-1])
+			B := !isZero(b[p.x-1][p.y+1])
+			return !(A && B)
+		}
+		logicGate(visited, b, f, p, value, nand)
 	default:
 	}
+}
+
+func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func() bool) {
+	//
+	//    ..
+	//    .X
+	//    ..
+	//
+	if f.x == p.x && f.y == p.y-1 {
+		b[p.x-1][p.y-1] = value
+		visited[p.x-1][p.y-1] = 'Y'
+	}
+	if f.x == p.x && f.y == p.y+1 {
+		b[p.x-1][p.y+1] = value
+		visited[p.x-1][p.y+1] = 'Y'
+	}
+	if visited[p.x-1][p.y+1] != 'Y' || visited[p.x-1][p.y-1] != 'Y' {
+		return
+	}
+	if conditionFn() {
+		b[p.x-1][p.y] = '1'
+		visited[p.x-1][p.y] = 'Y'
+		propogate(visited, b, p, coord{p.x + 1, p.y}, '1')
+		return
+	}
+	b[p.x-1][p.y] = '0'
+	visited[p.x-1][p.y] = 'Y'
+	propogate(visited, b, p, coord{p.x + 1, p.y}, '0')
+	return
 }
 
 func interpreter(b board) {
@@ -607,6 +663,12 @@ func main() {
 }
 
 var colors = map[rune]tcell.Color{
+	'=': tcell.ColorBlack,
+	'.': tcell.ColorBlack,
+	'@': tcell.ColorBlack,
+	'+': tcell.ColorBlack,
+	'^': tcell.ColorBlack,
+
 	'-':  tcell.ColorLightBlue,
 	'|':  tcell.ColorLightBlue,
 	'/':  tcell.ColorLightBlue,
@@ -633,6 +695,12 @@ var colors = map[rune]tcell.Color{
 	'9': tcell.ColorOrange,
 }
 var backgrounds = map[rune]tcell.Color{
+	'=': tcell.ColorOrange,
+	'.': tcell.ColorOrange,
+	'@': tcell.ColorOrange,
+	'+': tcell.ColorOrange,
+	'^': tcell.ColorOrange,
+
 	'$': tcell.ColorLightBlue,
 	'J': tcell.ColorLightBlue,
 	'L': tcell.ColorLightBlue,
