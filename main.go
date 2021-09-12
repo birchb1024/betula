@@ -51,7 +51,9 @@ func cond(control, yes, no rune) rune {
 
 type coord struct{ x, y int }
 
-func propogate(visited board, b board, p coord, value rune) {
+var nowhere = coord{-1, -1}
+
+func propogate(visited board, b board, f coord, p coord, value rune) {
 
 	if p.x >= len(b) || p.y >= len(b[0]) {
 		return
@@ -74,9 +76,9 @@ func propogate(visited board, b board, p coord, value rune) {
 		visited[p.x][p.y] = 'Y'
 		visited[p.x-1][p.y] = 'Y'
 		constant := b[p.x-1][p.y]
-		propogate(visited, b, coord{p.x, p.y + 1}, constant)
-		propogate(visited, b, coord{p.x + 1, p.y}, constant)
-		propogate(visited, b, coord{p.x, p.y - 1}, constant)
+		propogate(visited, b, p, coord{p.x, p.y + 1}, constant)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, constant)
+		propogate(visited, b, p, coord{p.x, p.y - 1}, constant)
 
 	case 'R':
 		//               .
@@ -98,9 +100,9 @@ func propogate(visited board, b board, p coord, value rune) {
 			}
 		}
 		randi := '0' + rune(rand.Intn(maxr))
-		propogate(visited, b, coord{p.x, p.y + 1}, randi)
-		propogate(visited, b, coord{p.x + 1, p.y}, randi)
-		propogate(visited, b, coord{p.x, p.y - 1}, randi)
+		propogate(visited, b, p, coord{p.x, p.y + 1}, randi)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, randi)
+		propogate(visited, b, p, coord{p.x, p.y - 1}, randi)
 
 	case 'C':
 		modulo := 2
@@ -126,24 +128,24 @@ func propogate(visited board, b board, p coord, value rune) {
 		visited[p.x][p.y] = 'Y'
 		visited[p.x-1][p.y] = 'Y'
 		visited[p.x-2][p.y] = 'Y'
-		propogate(visited, b, coord{p.x, p.y - 1}, clock)
-		propogate(visited, b, coord{p.x, p.y + 1}, clock)
-		propogate(visited, b, coord{p.x - 1, p.y}, clock)
-		propogate(visited, b, coord{p.x + 1, p.y}, clock)
+		propogate(visited, b, p, coord{p.x, p.y - 1}, clock)
+		propogate(visited, b, p, coord{p.x, p.y + 1}, clock)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, clock)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, clock)
 	case '-':
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case '|':
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x, p.y - 1}, value)
-		propogate(visited, b, coord{p.x, p.y + 1}, value)
+		propogate(visited, b, p, coord{p.x, p.y - 1}, value)
+		propogate(visited, b, p, coord{p.x, p.y + 1}, value)
 	case '/':
 		var end int
 		for end = p.x + 1; end < width; end++ {
@@ -159,8 +161,8 @@ func propogate(visited board, b board, p coord, value rune) {
 		}
 		visited[p.x][p.y] = 'Y'
 		visited[end][p.y] = 'Y'
-		propogate(visited, b, coord{end + 1, p.y}, value)
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, p, coord{end + 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case '\\':
 		var begin int
 		for begin = p.x - 1; begin > 0; begin-- {
@@ -176,31 +178,31 @@ func propogate(visited board, b board, p coord, value rune) {
 		}
 		visited[p.x][p.y] = 'Y'
 		visited[begin][p.y] = 'Y'
-		propogate(visited, b, coord{begin - 1, p.y}, value)
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, p, coord{begin - 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case '$':
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x, p.y - 1}, value)
-		propogate(visited, b, coord{p.x, p.y + 1}, value)
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x, p.y - 1}, value)
+		propogate(visited, b, p, coord{p.x, p.y + 1}, value)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	// Diode
 	case '>':
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 	// Diode
 	case '<':
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	// Invert
 	case 'N':
 		if visited[p.x][p.y] == 'Y' {
@@ -208,21 +210,52 @@ func propogate(visited board, b board, p coord, value rune) {
 		}
 		visited[p.x][p.y] = 'Y'
 		inverted := cond(value, '0', '1')
-		propogate(visited, b, coord{p.x, p.y - 1}, inverted)
-		propogate(visited, b, coord{p.x, p.y + 1}, inverted)
-		propogate(visited, b, coord{p.x + 1, p.y}, inverted)
-		propogate(visited, b, coord{p.x - 1, p.y}, inverted)
+		propogate(visited, b, p, coord{p.x, p.y - 1}, inverted)
+		propogate(visited, b, p, coord{p.x, p.y + 1}, inverted)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, inverted)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, inverted)
 	// Switch
 	case 'S':
+		//    .
+		//   .S.
+		//   ...
+		//
+		// ignore not the three inputs
+		if !((f.x == p.x-1 && f.y == p.y) || (f.x == p.x+1 && f.y == p.y) || (f.x == p.x && f.y == p.y-1)) {
+			return
+		}
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
-		if isZero(b[p.x][p.y-1]) {
+		if f.x == p.x && f.y == p.y-1 && visited[p.x][p.y+1] != 'Y' {
+			// new control signal
+			b[p.x][p.y+1] = value
+			visited[p.x][p.y+1] = 'Y'
+		} else if f.x == p.x-1 && f.y == p.y && visited[p.x-1][p.y+1] != 'Y' {
+			// new left signal
+			b[p.x-1][p.y+1] = value
+			visited[p.x-1][p.y+1] = 'Y'
+		} else if f.x == p.x+1 && f.y == p.y && visited[p.x+1][p.y+1] != 'Y' {
+			// new right signal
+			b[p.x+1][p.y+1] = value
+			visited[p.x+1][p.y+1] = 'Y'
+		}
+		if visited[p.x][p.y+1] != 'Y' {
+			// No control signal so out
 			return
 		}
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
+		if isZero(b[p.x][p.y+1]) {
+			return
+		}
+		if visited[p.x-1][p.y+1] == 'Y' {
+			// left
+			visited[p.x][p.y] = 'Y'
+			propogate(visited, b, p, coord{p.x + 1, p.y}, b[p.x-1][p.y+1])
+		} else if visited[p.x+1][p.y+1] == 'Y' {
+			// from right
+			visited[p.x][p.y] = 'Y'
+			propogate(visited, b, p, coord{p.x - 1, p.y}, b[p.x+1][p.y+1])
+		}
 	case 'L':
 		if visited[p.x][p.y] == 'Y' {
 			return
@@ -230,8 +263,8 @@ func propogate(visited board, b board, p coord, value rune) {
 		visited[p.x][p.y] = 'Y'
 		visited[p.x][p.y-1] = 'Y'
 		b[p.x][p.y-1] = value
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case 'J':
 		if visited[p.x][p.y] == 'Y' {
 			return
@@ -239,26 +272,26 @@ func propogate(visited board, b board, p coord, value rune) {
 		visited[p.x][p.y] = 'Y'
 		visited[p.x][p.y+1] = 'Y'
 		b[p.x][p.y+1] = value
-		propogate(visited, b, coord{p.x + 1, p.y}, value)
-		propogate(visited, b, coord{p.x - 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	// Equals
 	case '=':
-		if visited[p.x][p.y] != 'Y' {
+		if f.x == p.x && f.y == p.y-1 {
 			b[p.x-1][p.y-1] = value
-			visited[p.x][p.y] = 'Y'
 			visited[p.x-1][p.y-1] = 'Y'
+		}
+		if f.x == p.x && f.y == p.y+1 {
+			b[p.x-1][p.y+1] = value
+			visited[p.x-1][p.y+1] = 'Y'
+		}
+		if visited[p.x-1][p.y+1] != 'Y' || visited[p.x-1][p.y-1] != 'Y' {
 			return
 		}
-		if visited[p.x-1][p.y+1] == 'Y' {
+		if b[p.x-1][p.y-1] == b[p.x-1][p.y+1] {
+			propogate(visited, b, p, coord{p.x + 1, p.y}, '1')
 			return
 		}
-		b[p.x-1][p.y+1] = value
-		visited[p.x-1][p.y+1] = 'Y'
-		if b[p.x-1][p.y-1] == value {
-			propogate(visited, b, coord{p.x + 1, p.y}, '1')
-			return
-		}
-		propogate(visited, b, coord{p.x + 1, p.y}, '0')
+		propogate(visited, b, p, coord{p.x + 1, p.y}, '0')
 	default:
 	}
 }
@@ -287,7 +320,7 @@ func interpreter(b board) {
 		}
 
 		for _, p := range roots {
-			propogate(visited, b, p, ' ')
+			propogate(visited, b, nowhere, p, ' ')
 		}
 
 		// Clear numeric values not reachable from roots
