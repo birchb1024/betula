@@ -604,7 +604,7 @@ func main() {
 		case *tcell.EventResize:
 			s.Sync()
 		case *tcell.EventKey:
-			if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
+			if ev.Key() == tcell.KeyCtrlQ {
 				quit()
 			}
 			switch ev.Key() {
@@ -657,7 +657,7 @@ func main() {
 			default:
 			}
 		case *tcell.EventMouse:
-
+			cursorX, cursorY = ev.Position()
 		}
 	}
 }
