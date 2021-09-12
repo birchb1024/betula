@@ -85,9 +85,6 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		//              3R.
 		//               .
 		if visited[p.x][p.y] == 'Y' || visited[p.x-1][p.y] == 'Y' {
-			if value != b[p.x-1][p.y] {
-				setMiddleMsg(b, fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
-			}
 			return
 		}
 		visited[p.x][p.y] = 'Y'
@@ -274,8 +271,12 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		b[p.x][p.y+1] = value
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
-	// Equals
 	case '=':
+		// Equals
+		//    ..
+		//    .=
+		//    ..
+
 		if f.x == p.x && f.y == p.y-1 {
 			b[p.x-1][p.y-1] = value
 			visited[p.x-1][p.y-1] = 'Y'
@@ -288,9 +289,13 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 			return
 		}
 		if b[p.x-1][p.y-1] == b[p.x-1][p.y+1] {
+			b[p.x-1][p.y] = '1'
+			visited[p.x-1][p.y] = 'Y'
 			propogate(visited, b, p, coord{p.x + 1, p.y}, '1')
 			return
 		}
+		b[p.x-1][p.y] = '0'
+		visited[p.x-1][p.y] = 'Y'
 		propogate(visited, b, p, coord{p.x + 1, p.y}, '0')
 	default:
 	}
