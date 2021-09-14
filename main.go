@@ -62,7 +62,7 @@ var nowhere = coord{-1, -1}
 
 func propogate(visited board, b board, f coord, p coord, value rune) {
 
-	if p.x >= len(b) || p.y >= len(b[0]) {
+	if p.x >= len(b) || p.y >= len(b[0]) || p.x < 0 || p.y < 0 {
 		return
 	}
 	if len(visited) > 1 && nonValue(b[p.x][p.y]) {
@@ -76,7 +76,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		//               .
 		if visited[p.x][p.y] == 'Y' || visited[p.x-1][p.y] == 'Y' {
 			if value != b[p.x-1][p.y] {
-				setMiddleMsg(b, fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
+				setMiddleMsg(fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
 			}
 			return
 		}
@@ -111,12 +111,14 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 	case 'C':
 		modulo := 2
 		fraction := 10
-		if isDigit(b[p.x-1][p.y]) {
+		if p.x > 0 && isDigit(b[p.x-1][p.y]) {
+			visited[p.x-1][p.y] = 'Y'
 			modulo = int(b[p.x-1][p.y] - '0')
 			if modulo == 0 {
 				modulo = 10
 			}
-			if isDigit(b[p.x-2][p.y]) {
+			if p.x-1 > 0 && isDigit(b[p.x-2][p.y]) {
+				visited[p.x-2][p.y] = 'Y'
 				fraction = int(b[p.x-2][p.y] - '0')
 				if fraction == 0 {
 					fraction = 10
@@ -130,8 +132,6 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 			return
 		}
 		visited[p.x][p.y] = 'Y'
-		visited[p.x-1][p.y] = 'Y'
-		visited[p.x-2][p.y] = 'Y'
 		propogate(visited, b, p, coord{p.x, p.y - 1}, clock)
 		propogate(visited, b, p, coord{p.x, p.y + 1}, clock)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, clock)
@@ -152,7 +152,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		propogate(visited, b, p, coord{p.x, p.y + 1}, value)
 	case '/':
 		var end int
-		for end = p.x + 1; end < width; end++ {
+		for end = p.x + 1; end < width-2; end++ {
 			if b[end][p.y] == '\\' {
 				break
 			}
@@ -184,7 +184,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		visited[begin][p.y] = 'Y'
 		propogate(visited, b, p, coord{begin - 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
-	case '$':
+	case '@':
 		if visited[p.x][p.y] == 'Y' {
 			return
 		}
@@ -310,7 +310,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 			return A || B
 		}
 		logicGate(visited, b, f, p, value, or)
-	case '@':
+	case '#':
 		exclusiveOr := func() bool {
 			A := !isZero(b[p.x-1][p.y-1])
 			B := !isZero(b[p.x-1][p.y+1])
@@ -357,12 +357,61 @@ func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn
 	return
 }
 
+var macros = make(map[string]board)
+
+func expandMacro(pb board, home coord, name string) {
+	mb, ok := macros[name]
+	if !ok {
+		macroBoard, err := loadMacroFile(fmt.Sprintf("%s.betula", name))
+		if err != nil {
+			setMiddleMsg(err.Error())
+			return
+		}
+		macros[name] = macroBoard
+		mb = macroBoard
+	}
+	parentWidth := len(pb)
+	parentHeight := len(pb[0])
+	macroWidth := len(mb)
+	macroHeight := len(mb[0])
+	for x := 0; x < macroWidth; x++ {
+		for y := 0; y < macroHeight; y++ {
+			if home.x+x >= parentWidth || home.y+y >= parentHeight {
+				continue
+			}
+			pb[home.x+x][home.y+y] = mb[x][y]
+		}
+	}
+
+}
 func interpreter(b board) {
 	var visited board
 	for {
 		boardMutex.Lock()
 		roots := make([]coord, 0)
 		visited = makeBoard(len(b), len(b[0]))
+		// Find and copy Macros # TODO recursive...
+		for y := 0; y < height-1; y++ {
+			for x := 0; x < width; x++ {
+				switch b[x][y] {
+				case 'M':
+					// collect the name
+					name := make([]rune, width)
+					var i int
+					for i = 0; ; i++ {
+						if nonValue(b[x+1+i][y]) || x+i >= width {
+							break
+						}
+						name[i] = b[x+1+i][y]
+					}
+					name = name[:i]
+					if len(name) == 0 {
+						break
+					}
+					expandMacro(b, coord{x, y + 1}, string(name))
+				}
+			}
+		}
 		// Find roots
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
@@ -403,7 +452,7 @@ func interpreter(b board) {
 func render(s tcell.Screen, b board) {
 	for {
 		boardMutex.Lock()
-		setLeftMsg(b, fmt.Sprintf("%3d %3d", cursorX, cursorY))
+		setLeftMsg(fmt.Sprintf("%3d %3d", cursorX, cursorY))
 		boardMutex.Unlock()
 		view(s, b)
 		s.Show()
@@ -445,6 +494,13 @@ func sizeOfFile(filename string) (int, int, error) {
 		x += 1
 	}
 }
+func loadMacroFile(filename string) (board, error) {
+	macroWidth, macroHeight, err := sizeOfFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	return loadFile(filename, macroWidth, macroHeight)
+}
 func loadFile(filename string, width int, height int) (board, error) {
 	fd, err := os.Open(filename)
 	defer func(fd *os.File) { _ = fd.Close() }(fd)
@@ -462,7 +518,7 @@ func loadFile(filename string, width int, height int) (board, error) {
 	for {
 		r, _, err := rdr.ReadRune()
 		if err == io.EOF {
-			setMiddleMsg(b, fmt.Sprintf("Loaded %s, into width %d, height %d", filename, width, height))
+			setMiddleMsgRaw(b, fmt.Sprintf("Loaded %s, into width %d, height %d", filename, width, height))
 			return b, nil
 		}
 		if err != nil {
@@ -482,7 +538,7 @@ func saveFile(b board, filename string) {
 
 	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		setMiddleMsg(b, err.Error())
+		setMiddleMsg(err.Error())
 		return
 	}
 	defer func(fd *os.File) { _ = fd.Close() }(fd)
@@ -510,17 +566,17 @@ func saveFile(b board, filename string) {
 			}
 			_, err := fmt.Fprintf(fd, "%c", r)
 			if err != nil {
-				setMiddleMsg(b, err.Error())
+				setMiddleMsg(err.Error())
 				return
 			}
 		}
 		_, err = fmt.Fprintf(fd, "\n")
 		if err != nil {
-			setMiddleMsg(b, err.Error())
+			setMiddleMsg(err.Error())
 			return
 		}
 	}
-	setMiddleMsg(b, fmt.Sprintf("Saved %s, width %d, height %d", filename, actualWidth, actualHeight))
+	setMiddleMsg(fmt.Sprintf("Saved %s, width %d, height %d", filename, actualWidth, actualHeight))
 
 }
 
@@ -544,8 +600,39 @@ func (b board) setIfEmpty(x int, y int, r rune) {
 		b[x][y] = r
 	}
 }
+func setMiddleMsgRaw(b board, msg string) {
+	runes := []rune(msg)
+	startOfMiddle := 20 // TODO use math to find spot
+	if len(b) <= startOfMiddle {
+		return // TODO remove this hack
+	}
+	for i, r := range runes {
+		if i+startOfMiddle >= len(b) {
+			break
+		}
+		b[i+startOfMiddle][height-1] = r
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
+}
+
+var setMiddleMsg func(string)
+var setLeftMsg func(string)
+
 func main() {
 	var theBoard board
+
+	setMiddleMsg = func(msg string) {
+		setMiddleMsgRaw(theBoard, msg)
+	}
+
+	setLeftMsg = func(msg string) {
+		runes := []rune(msg)
+		for i, r := range runes {
+			theBoard[i][height-1] = r
+		}
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
+	}
+
 	filename := "untitled.betula"
 
 	s, err := tcell.NewScreen()
@@ -665,7 +752,7 @@ func main() {
 var colors = map[rune]tcell.Color{
 	'=': tcell.ColorBlack,
 	'.': tcell.ColorBlack,
-	'@': tcell.ColorBlack,
+	'#': tcell.ColorBlack,
 	'+': tcell.ColorBlack,
 	'^': tcell.ColorBlack,
 
@@ -673,13 +760,15 @@ var colors = map[rune]tcell.Color{
 	'|':  tcell.ColorLightBlue,
 	'/':  tcell.ColorLightBlue,
 	'\\': tcell.ColorLightBlue,
-	'$':  tcell.ColorBlue,
-	'?':  tcell.ColorRed,
+	'@':  tcell.ColorLightBlue,
+
+	'?': tcell.ColorRed,
 
 	'L': tcell.ColorBlack,
 	'J': tcell.ColorBlack,
 	'N': tcell.ColorBlue,
 	'*': tcell.ColorBlack,
+	'R': tcell.ColorBlack,
 	'C': tcell.ColorDarkBlue,
 	'S': tcell.ColorBlack,
 
@@ -697,17 +786,18 @@ var colors = map[rune]tcell.Color{
 var backgrounds = map[rune]tcell.Color{
 	'=': tcell.ColorOrange,
 	'.': tcell.ColorOrange,
-	'@': tcell.ColorOrange,
+	'#': tcell.ColorOrange,
 	'+': tcell.ColorOrange,
 	'^': tcell.ColorOrange,
 
-	'$': tcell.ColorLightBlue,
 	'J': tcell.ColorLightBlue,
 	'L': tcell.ColorLightBlue,
 	'N': tcell.ColorLightPink,
 	'S': tcell.ColorLightPink,
+
 	'C': tcell.ColorLightGreen,
 	'*': tcell.ColorLightGreen,
+	'R': tcell.ColorLightGreen,
 }
 
 func styleOf(r rune) tcell.Style {
@@ -723,22 +813,6 @@ func styleOf(r rune) tcell.Style {
 	}
 	return s
 
-}
-
-func setMiddleMsg(b board, msg string) {
-	runes := []rune(msg)
-	for i, r := range runes {
-		b[i+20][height-1] = r
-	}
-	_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
-}
-
-func setLeftMsg(b board, msg string) {
-	runes := []rune(msg)
-	for i, r := range runes {
-		b[i][height-1] = r
-	}
-	_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
 }
 
 func view(s tcell.Screen, b board) {
