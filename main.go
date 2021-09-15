@@ -36,12 +36,6 @@ func isZero(r rune) bool {
 	}
 	return false
 }
-func isDigit(r rune) bool {
-	if r >= '0' && r <= '9' {
-		return true
-	}
-	return false
-}
 func cond(control, yes, no rune) rune {
 	if isZero(control) {
 		return no
@@ -59,10 +53,12 @@ func toBinary(x rune) rune {
 type coord struct{ x, y int }
 
 var nowhere = coord{-1, -1}
+var clockTicks int
+
 
 func propogate(visited board, b board, f coord, p coord, value rune) {
 
-	if p.x >= len(b) || p.y >= len(b[0]) || p.x < 0 || p.y < 0 {
+	if b.off(p.x, p.y) {
 		return
 	}
 	if len(visited) > 1 && nonValue(b[p.x][p.y]) {
@@ -74,14 +70,14 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		//               .
 		//              3*.
 		//               .
-		if visited[p.x][p.y] == 'Y' || visited[p.x-1][p.y] == 'Y' {
+		if visited.yes(p) || visited.yes(coord{p.x-1, p.y}) {
 			if value != b[p.x-1][p.y] {
 				setMiddleMsg(fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
 			}
 			return
 		}
-		visited[p.x][p.y] = 'Y'
-		visited[p.x-1][p.y] = 'Y'
+		visited.done(p)
+		visited.set(p.x-1, p.y, 'Y')
 		constant := b[p.x-1][p.y]
 		propogate(visited, b, p, coord{p.x, p.y + 1}, constant)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, constant)
@@ -91,63 +87,61 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		//               .
 		//              3R.
 		//               .
-		if visited[p.x][p.y] == 'Y' || visited[p.x-1][p.y] == 'Y' {
+		if visited.yes(p) || visited.yes(coord{p.x-1, p.y}) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
-		visited[p.x-1][p.y] = 'Y'
+		visited.done(p)
+		visited.set(p.x-1, p.y, 'Y')
 		maxr := 1
 		if isDigit(b[p.x-1][p.y]) {
-			maxr = int(b[p.x-1][p.y] - '0')
+			maxr = rune2Int(b[p.x-1][p.y])
 			if maxr == 0 {
 				maxr = 1
 			}
 		}
-		randi := '0' + rune(rand.Intn(maxr))
+		randi := int2Rune(rand.Intn(maxr))
 		propogate(visited, b, p, coord{p.x, p.y + 1}, randi)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, randi)
 		propogate(visited, b, p, coord{p.x, p.y - 1}, randi)
 
 	case 'C':
 		modulo := 2
-		fraction := 10
+		fraction := 4
+		div := 1
 		if p.x > 0 && isDigit(b[p.x-1][p.y]) {
 			visited[p.x-1][p.y] = 'Y'
-			modulo = int(b[p.x-1][p.y] - '0')
+			modulo = rune2Int(b[p.x-1][p.y])
 			if modulo == 0 {
 				modulo = 10
 			}
 			if p.x-1 > 0 && isDigit(b[p.x-2][p.y]) {
 				visited[p.x-2][p.y] = 'Y'
-				fraction = int(b[p.x-2][p.y] - '0')
-				if fraction == 0 {
-					fraction = 10
-				}
+				fraction = rune2Int(b[p.x-2][p.y])
+				div = 1 << fraction
 			}
 		}
-		divisor := 100 * fraction
-		milliSeconds := time.Now().Second()*1000 + time.Now().Nanosecond()/1000000
-		clock := '0' + rune((milliSeconds/divisor)%modulo)
-		if visited[p.x][p.y] == 'Y' {
+		clock := (clockTicks/div) % modulo
+		clockRune := int2Rune(clock)
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
-		propogate(visited, b, p, coord{p.x, p.y - 1}, clock)
-		propogate(visited, b, p, coord{p.x, p.y + 1}, clock)
-		propogate(visited, b, p, coord{p.x - 1, p.y}, clock)
-		propogate(visited, b, p, coord{p.x + 1, p.y}, clock)
+		visited.done(p)
+		propogate(visited, b, p, coord{p.x, p.y - 1}, clockRune)
+		propogate(visited, b, p, coord{p.x, p.y + 1}, clockRune)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, clockRune)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, clockRune)
 	case '-':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case '|':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		propogate(visited, b, p, coord{p.x, p.y - 1}, value)
 		propogate(visited, b, p, coord{p.x, p.y + 1}, value)
 	case '/':
@@ -160,10 +154,10 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		if end == 0 {
 			return
 		}
-		if visited[p.x][p.y] == 'Y' || visited[end][p.y] == 'Y' {
+		if visited.yes(p) || visited.yes(coord{end, p.y}) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		visited[end][p.y] = 'Y'
 		propogate(visited, b, p, coord{end + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
@@ -177,49 +171,49 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		if begin == 0 {
 			return
 		}
-		if visited[p.x][p.y] == 'Y' || visited[begin][p.y] == 'Y' {
+		if visited.yes(p) || visited[begin][p.y] == 'Y' {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		visited[begin][p.y] = 'Y'
 		propogate(visited, b, p, coord{begin - 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case '@':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		propogate(visited, b, p, coord{p.x, p.y - 1}, value)
 		propogate(visited, b, p, coord{p.x, p.y + 1}, value)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	// Buffer left->right
 	case '~':
-		if visited[p.x][p.y] == 'Y' || f.x != p.x-1 || f.y != p.y {
+		if visited.yes(p) || f.x != p.x-1 || f.y != p.y {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, toBinary(value))
 	// Diode
 	case '>':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 	// Diode
 	case '<':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	// Invert
 	case 'N':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
+		visited.done(p)
 		inverted := cond(value, '0', '1')
 		propogate(visited, b, p, coord{p.x, p.y - 1}, inverted)
 		propogate(visited, b, p, coord{p.x, p.y + 1}, inverted)
@@ -231,24 +225,24 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		//   .S.
 		//   ...
 		//
-		// ignore not the three inputs
+		// ignore if not the three inputs
 		if !((f.x == p.x-1 && f.y == p.y) || (f.x == p.x+1 && f.y == p.y) || (f.x == p.x && f.y == p.y-1)) {
 			return
 		}
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
 		if f.x == p.x && f.y == p.y-1 && visited[p.x][p.y+1] != 'Y' {
 			// new control signal
-			b[p.x][p.y+1] = value
-			visited[p.x][p.y+1] = 'Y'
+			b.set(p.x, p.y+1, value)
+			visited.set(p.x, p.y+1, 'Y')
 		} else if f.x == p.x-1 && f.y == p.y && visited[p.x-1][p.y+1] != 'Y' {
 			// new left signal
-			b[p.x-1][p.y+1] = value
+			b.set(p.x-1, p.y+1, value)
 			visited[p.x-1][p.y+1] = 'Y'
 		} else if f.x == p.x+1 && f.y == p.y && visited[p.x+1][p.y+1] != 'Y' {
 			// new right signal
-			b[p.x+1][p.y+1] = value
+			b.set(p.x+1, p.y+1, value)
 			visited[p.x+1][p.y+1] = 'Y'
 		}
 		if visited[p.x][p.y+1] != 'Y' {
@@ -260,29 +254,29 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		}
 		if visited[p.x-1][p.y+1] == 'Y' {
 			// left
-			visited[p.x][p.y] = 'Y'
+			visited.done(p)
 			propogate(visited, b, p, coord{p.x + 1, p.y}, b[p.x-1][p.y+1])
 		} else if visited[p.x+1][p.y+1] == 'Y' {
 			// from right
-			visited[p.x][p.y] = 'Y'
+			visited.done(p)
 			propogate(visited, b, p, coord{p.x - 1, p.y}, b[p.x+1][p.y+1])
 		}
 	case 'L':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
-		visited[p.x][p.y-1] = 'Y'
-		b[p.x][p.y-1] = value
+		visited.done(p)
+		visited.set(p.x, p.y-1, 'Y')
+		b.set(p.x, p.y-1, value)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case 'J':
-		if visited[p.x][p.y] == 'Y' {
+		if visited.yes(p) {
 			return
 		}
-		visited[p.x][p.y] = 'Y'
-		visited[p.x][p.y+1] = 'Y'
-		b[p.x][p.y+1] = value
+		visited.done(p)
+		visited.set(p.x, p.y+1, 'Y')
+		b.set(p.x, p.y+1, value)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 
@@ -328,6 +322,14 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 	}
 }
 
+func int2Rune(i int) rune {
+	return rune('0' + i) // todo add hexadecimal
+}
+
+func rune2Int(r rune) int {
+	return int(r - '0') // TODO add hexadecimal
+}
+
 func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func() bool) {
 	//
 	//    ..
@@ -335,23 +337,23 @@ func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn
 	//    ..
 	//
 	if f.x == p.x && f.y == p.y-1 {
-		b[p.x-1][p.y-1] = value
+		b.set(p.x-1, p.y-1, value)
 		visited[p.x-1][p.y-1] = 'Y'
 	}
 	if f.x == p.x && f.y == p.y+1 {
-		b[p.x-1][p.y+1] = value
+		b.set(p.x-1, p.y+1, value)
 		visited[p.x-1][p.y+1] = 'Y'
 	}
 	if visited[p.x-1][p.y+1] != 'Y' || visited[p.x-1][p.y-1] != 'Y' {
 		return
 	}
 	if conditionFn() {
-		b[p.x-1][p.y] = '1'
+		b.set(p.x-1, p.y, '1')
 		visited[p.x-1][p.y] = 'Y'
 		propogate(visited, b, p, coord{p.x + 1, p.y}, '1')
 		return
 	}
-	b[p.x-1][p.y] = '0'
+	b.set(p.x-1, p.y, '0')
 	visited[p.x-1][p.y] = 'Y'
 	propogate(visited, b, p, coord{p.x + 1, p.y}, '0')
 	return
@@ -379,7 +381,7 @@ func expandMacro(pb board, home coord, name string) {
 			if home.x+x >= parentWidth || home.y+y >= parentHeight {
 				continue
 			}
-			pb[home.x+x][home.y+y] = mb[x][y]
+			pb.set(home.x+x, home.y+y, mb[x][y])
 		}
 	}
 
@@ -387,6 +389,7 @@ func expandMacro(pb board, home coord, name string) {
 func interpreter(b board) {
 	var visited board
 	for {
+		clockTicks += 1
 		boardMutex.Lock()
 		roots := make([]coord, 0)
 		visited = makeBoard(len(b), len(b[0]))
@@ -399,7 +402,10 @@ func interpreter(b board) {
 					name := make([]rune, width)
 					var i int
 					for i = 0; ; i++ {
-						if nonValue(b[x+1+i][y]) || x+i >= width {
+						if x+i >= width {
+							break
+						}
+						if nonValue(b[x+1+i][y]) {
 							break
 						}
 						name[i] = b[x+1+i][y]
@@ -417,7 +423,7 @@ func interpreter(b board) {
 			for x := 0; x < width; x++ {
 				switch b[x][y] {
 				case 'L':
-					b[x][y-1] = ' '
+					b.set(x, y-1, ' ')
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
@@ -436,9 +442,9 @@ func interpreter(b board) {
 		// Clear numeric values not reachable from roots
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
-				if visited[x][y] != 'Y' {
-					if b[x][y] >= '0' && b[x][y] <= '9' {
-						b[x][y] = ' '
+				if !visited.yes(coord{x, y}) {
+					if isDigit(b[x][y]) {
+						b.set(x, y, ' ')
 					}
 
 				}
@@ -448,7 +454,9 @@ func interpreter(b board) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
-
+func isDigit(r rune) bool {
+	return r >= '0' && r <= '9'
+}
 func render(s tcell.Screen, b board) {
 	for {
 		boardMutex.Lock()
@@ -518,7 +526,7 @@ func loadFile(filename string, width int, height int) (board, error) {
 	for {
 		r, _, err := rdr.ReadRune()
 		if err == io.EOF {
-			setMiddleMsgRaw(b, fmt.Sprintf("Loaded %s, into width %d, height %d", filename, width, height))
+			setMiddleMsg(fmt.Sprintf("Loaded %s, into width %d, height %d", filename, width, height))
 			return b, nil
 		}
 		if err != nil {
@@ -529,14 +537,14 @@ func loadFile(filename string, width int, height int) (board, error) {
 			y += 1
 			continue
 		}
-		b[x][y] = r
+		b.set(x,y,r)
 		x += 1
 	}
 }
 
-func saveFile(b board, filename string) {
+func (b board) saveFile(filename string) {
 
-	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
+	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		setMiddleMsg(err.Error())
 		return
@@ -600,37 +608,69 @@ func (b board) setIfEmpty(x int, y int, r rune) {
 		b[x][y] = r
 	}
 }
-func setMiddleMsgRaw(b board, msg string) {
-	runes := []rune(msg)
-	startOfMiddle := 20 // TODO use math to find spot
-	if len(b) <= startOfMiddle {
-		return // TODO remove this hack
+
+// off() - Are we off the board?
+func (b board) off(x int, y int) bool {
+	if x < 0 || y < 0 || x >= len(b) {
+		return true
 	}
+	if y >= len(b[x]) {
+		return true
+	}
+	return false
+}
+// set() - Set a value but don't throw an error if outside the board
+func (b board) set(x int, y int, r rune) {
+	if b.off(x,y) {
+		return
+	}
+	b[x][y] = r
+}
+
+func (b board) yes(p coord) bool {
+	if b.off(p.x, p.y) {
+		return false
+	}
+	return b[p.x][p.y] == 'Y'
+}
+
+func (b board) done(p coord) {
+	if b.off(p.x, p.y) {
+		return
+	}
+	b[p.x][p.y] = 'Y'
+}
+func setMiddleMsgRaw(s tcell.Screen, msg string) {
+	w, _ := s.Size()
+	runes := []rune(msg)
 	for i, r := range runes {
-		if i+startOfMiddle >= len(b) {
+		if i >= w {
 			break
 		}
-		b[i+startOfMiddle][height-1] = r
+		s.SetContent(i, 0, r, nil, tcell.StyleDefault)
 	}
-	_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
+	_, _ = fmt.Fprintf(logfd, "%s\n", msg)
 }
 
 var setMiddleMsg func(string)
 var setLeftMsg func(string)
+var logfd *os.File
 
 func main() {
-	var theBoard board
-
-	setMiddleMsg = func(msg string) {
-		setMiddleMsgRaw(theBoard, msg)
+	logfd, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		log.Fatal(err)
 	}
+	defer func(fd *os.File) { _ = fd.Close() }(logfd)
+
+	var theBoard board
 
 	setLeftMsg = func(msg string) {
 		runes := []rune(msg)
 		for i, r := range runes {
-			theBoard[i][height-1] = r
+			theBoard.set(i, height-1, r)
 		}
-		_, _ = fmt.Fprintf(os.Stderr, "%s\n", msg)
+		//		_, _ = fmt.Fprintf(logfd, "%s\n", msg)
 	}
 
 	filename := "untitled.betula"
@@ -642,6 +682,9 @@ func main() {
 	if err := s.Init(); err != nil {
 		log.Fatalf("%+v", err)
 	}
+	setMiddleMsg = func(msg string) {
+		setMiddleMsgRaw(s, msg)
+	}
 
 	// Set default text style
 	defStyle := tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite)
@@ -651,7 +694,7 @@ func main() {
 	s.Clear()
 
 	screenWidth, screenHeight := s.Size()
-	_, _ = fmt.Fprintf(os.Stderr, "screenWidth %d, screenHeight %d\n", screenWidth, screenHeight)
+	_, _ = fmt.Fprintf(logfd, "screenWidth %d, screenHeight %d\n", screenWidth, screenHeight)
 	cursorX = screenWidth / 2
 	cursorY = screenHeight / 2
 
@@ -662,7 +705,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("ERROR: file %s - %s\n", os.Args[1], err)
 		}
-		_, _ = fmt.Fprintf(os.Stderr, "fileWidth %d, fileHeight %d\n", fileWidth, fileHeight)
+		_, _ = fmt.Fprintf(logfd, "fileWidth %d, fileHeight %d\n", fileWidth, fileHeight)
 		width = maxInt(fileWidth, screenWidth)
 		height = maxInt(fileHeight, screenHeight)
 		theBoard, err = loadFile(filename, width, height)
@@ -697,24 +740,35 @@ func main() {
 			switch ev.Key() {
 
 			case tcell.KeyF5:
+				// Toggle the value under the cursor
 				boardMutex.Lock()
 				r := theBoard[cursorX][cursorY]
 				if nonValue(r) || r == '0' {
-					theBoard[cursorX][cursorY] = '1'
+					theBoard.set(cursorX, cursorY, '1')
 				} else {
-					theBoard[cursorX][cursorY] = '0'
+					theBoard.set(cursorX, cursorY, '0')
 				}
 				boardMutex.Unlock()
 			case tcell.KeyDelete:
 				boardMutex.Lock()
-				theBoard[cursorX][cursorY] = ' '
+				theBoard.set(cursorX, cursorY, ' ')
 				boardMutex.Unlock()
+				// follow wires
+				if !nonValue(theBoard[cursorX+1][cursorY]) {
+					cursorX += 1
+				} else if !nonValue(theBoard[cursorX-1][cursorY]) {
+					cursorX -= 1
+				} else if !nonValue(theBoard[cursorX][cursorY+1]) {
+					cursorY += 1
+				} else if !nonValue(theBoard[cursorX][cursorY-1]) {
+					cursorY -= 1
+				}
 			case tcell.KeyBackspace2:
 				if cursorX > 0 {
 					cursorX -= 1
 				}
 				boardMutex.Lock()
-				theBoard[cursorX][cursorY] = ' '
+				theBoard.set(cursorX, cursorY, ' ')
 				boardMutex.Unlock()
 			case tcell.KeyUp:
 				if cursorY != 0 {
@@ -732,15 +786,36 @@ func main() {
 				if cursorX < width-1 {
 					cursorX += 1
 				}
+			case tcell.KeyF4: // for inside the debugger
+				boardMutex.Lock()
+				theBoard.saveFile(filename)
+				boardMutex.Unlock()
 			case tcell.KeyCtrlS:
 				boardMutex.Lock()
-				saveFile(theBoard, filename)
+				theBoard.saveFile(filename)
 				boardMutex.Unlock()
 			case tcell.KeyRune:
+				k := ev.Rune()
 				boardMutex.Lock()
-				theBoard[cursorX][cursorY] = ev.Rune()
+				theBoard.set(cursorX, cursorY, k)
 				boardMutex.Unlock()
-				cursorX += 1
+				// follow wires
+				switch k {
+				case '|':
+					if nonValue(theBoard[cursorX][cursorY+1]) {
+						cursorY += 1
+					} else if nonValue(theBoard[cursorX][cursorY-1]) {
+						cursorY -= 1
+					}
+				case '-':
+					if nonValue(theBoard[cursorX+1][cursorY]) {
+						cursorX += 1
+					} else if nonValue(theBoard[cursorX-1][cursorY]) {
+						cursorX -= 1
+					}
+				default:
+					cursorX += 1
+				}
 			default:
 			}
 		case *tcell.EventMouse:
@@ -772,6 +847,8 @@ var colors = map[rune]tcell.Color{
 	'C': tcell.ColorDarkBlue,
 	'S': tcell.ColorBlack,
 
+	'M': tcell.ColorBlack,
+
 	'0': tcell.ColorRed,
 	'1': tcell.ColorOrange,
 	'2': tcell.ColorOrange,
@@ -794,6 +871,8 @@ var backgrounds = map[rune]tcell.Color{
 	'L': tcell.ColorLightBlue,
 	'N': tcell.ColorLightPink,
 	'S': tcell.ColorLightPink,
+
+	'M': tcell.ColorLightGoldenrodYellow,
 
 	'C': tcell.ColorLightGreen,
 	'*': tcell.ColorLightGreen,
