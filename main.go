@@ -725,12 +725,24 @@ const (
 )
 
 type editor struct {
-	ks int
-	pivot coord
+	ks                 int
+	pivot              coord
 	selectionRectangle rectangle
+	cutPasteBuffer     board
 }
 
-var theEditor editor
+var theEditor = newEditor()
+
+func newEditor() (e *editor) {
+	return &editor{
+		ks: KeysNormal,
+		selectionRectangle: rectangle{
+			coord{0, 0},
+			coord{0, 0},
+		},
+		cutPasteBuffer: makeBoard(0, 0),
+	}
+}
 
 func newRectangle(x, y, x2, y2 int) rectangle {
 	return rectangle{
@@ -755,7 +767,7 @@ func (e *editor) noShift() {
 }
 
 func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) {
-	if modifiers & tcell.ModShift != 0 { // Shift key
+	if modifiers&tcell.ModShift != 0 { // Shift key
 		if e.ks == KeysNormal {
 			// starting selection
 			e.pivot = cursor
@@ -765,6 +777,29 @@ func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) 
 			e.update(cursorAfter)
 		}
 		e.ks = KeysSelecting
+	}
+}
+
+func (e *editor) copy(b board) {
+	if e.ks == KeysNormal {
+		return
+	} else {
+		// in selection mode
+		e.cutPasteBuffer = makeBoard(e.selectionRectangle.bottomRight.x-e.selectionRectangle.topLeft.x+1, e.selectionRectangle.bottomRight.y-e.selectionRectangle.topLeft.y+1)
+		for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
+			for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
+				e.cutPasteBuffer.set(x-e.selectionRectangle.topLeft.x, y-e.selectionRectangle.topLeft.y, b.get(x, y))
+			}
+		}
+		e.ks = KeysNormal
+	}
+}
+
+func (e *editor) paste(b board, cursor coord) {
+	for x := 0; x < len(e.cutPasteBuffer); x++ {
+		for y := 0; y < len(e.cutPasteBuffer[x]); y++ {
+			b.set(cursor.x+x, cursor.y+y, e.cutPasteBuffer.get(x, y))
+		}
 	}
 }
 
@@ -783,13 +818,11 @@ func (e *editor) delete(b board, cursor coord) {
 }
 
 func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
-		if 	e.ks == KeysSelecting && e.selectionRectangle.inside(p) {
-			return cellStyle.Background(tcell.ColorLightSlateGray)
-		}
+	if e.ks == KeysSelecting && e.selectionRectangle.inside(p) {
+		return cellStyle.Background(tcell.ColorLightSlateGray)
+	}
 	return cellStyle
 }
-
-
 
 func main() {
 	logfd, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
@@ -869,7 +902,7 @@ func main() {
 		case *tcell.EventResize:
 			s.Sync()
 		case *tcell.EventKey:
-			if ev.Modifiers() & tcell.ModShift == 0 && ev.Key() != tcell.KeyDelete { // TODO
+			if ev.Modifiers()&tcell.ModShift == 0 && ev.Key() != tcell.KeyDelete && ev.Key() != tcell.KeyCtrlC { // TODO
 				theEditor.noShift()
 			}
 			switch ev.Key() {
@@ -887,7 +920,7 @@ func main() {
 				boardMutex.Unlock()
 			case tcell.KeyDelete:
 				boardMutex.Lock()
-				theEditor.delete(theBoard, coord{cursorX, cursorY} )
+				theEditor.delete(theBoard, coord{cursorX, cursorY})
 				boardMutex.Unlock()
 				// follow wires
 				if !nonValue(theBoard.get(cursorX+1, cursorY)) {
@@ -899,6 +932,14 @@ func main() {
 				} else if !nonValue(theBoard.get(cursorX, cursorY-1)) {
 					cursorY -= 1
 				}
+			case tcell.KeyCtrlC:
+				boardMutex.Lock()
+				theEditor.copy(theBoard)
+				boardMutex.Unlock()
+			case tcell.KeyCtrlV:
+				boardMutex.Lock()
+				theEditor.paste(theBoard, coord{cursorX, cursorY})
+				boardMutex.Unlock()
 			case tcell.KeyBackspace2:
 				if cursorX > 0 {
 					cursorX -= 1
@@ -908,22 +949,22 @@ func main() {
 				boardMutex.Unlock()
 			case tcell.KeyUp:
 				if cursorY != 0 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY-1}, ev.Modifiers())
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY - 1}, ev.Modifiers())
 					cursorY -= 1
 				}
 			case tcell.KeyDown:
 				if cursorY < height-2 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY+1}, ev.Modifiers())
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY + 1}, ev.Modifiers())
 					cursorY += 1
 				}
 			case tcell.KeyLeft:
 				if cursorX != 0 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX-1, cursorY}, ev.Modifiers())
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX - 1, cursorY}, ev.Modifiers())
 					cursorX -= 1
 				}
 			case tcell.KeyRight:
 				if cursorX < width-1 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX+1, cursorY}, ev.Modifiers())
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX + 1, cursorY}, ev.Modifiers())
 					cursorX += 1
 				}
 			case tcell.KeyF4: // for inside the debugger
