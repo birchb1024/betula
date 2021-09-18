@@ -55,7 +55,6 @@ type coord struct{ x, y int }
 var nowhere = coord{-1, -1}
 var clockTicks int
 
-
 func propogate(visited board, b board, f coord, p coord, value rune) {
 
 	if b.off(p.x, p.y) {
@@ -70,7 +69,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		//               .
 		//              3*.
 		//               .
-		if visited.yes(p) || visited.yes(coord{p.x-1, p.y}) {
+		if visited.yes(p) || visited.yes(coord{p.x - 1, p.y}) {
 			if value != b[p.x-1][p.y] {
 				setMiddleMsg(fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
 			}
@@ -87,7 +86,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		//               .
 		//              3R.
 		//               .
-		if visited.yes(p) || visited.yes(coord{p.x-1, p.y}) {
+		if visited.yes(p) || visited.yes(coord{p.x - 1, p.y}) {
 			return
 		}
 		visited.done(p)
@@ -120,7 +119,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 				div = 1 << fraction
 			}
 		}
-		clock := (clockTicks/div) % modulo
+		clock := (clockTicks / div) % modulo
 		clockRune := int2Rune(clock)
 		if visited.yes(p) {
 			return
@@ -307,7 +306,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 			return
 		}
 		visited.done(p)
-		visited.done(coord{p.x, p.y-1})
+		visited.done(coord{p.x, p.y - 1})
 		b.set(p.x, p.y-1, value)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
@@ -317,7 +316,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		}
 		b.set(p.x, p.y+1, value)
 		visited.done(p)
-		visited.done(coord{p.x, p.y+1})
+		visited.done(coord{p.x, p.y + 1})
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 
@@ -510,9 +509,16 @@ func render(s tcell.Screen, b board) {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
-func maxInt(x, y int) int {
-	if x < y {
-		return y
+func minInt(x int, x2 int) int {
+	if x2 < x {
+		return x2
+	}
+	return x
+}
+
+func maxInt(x, x2 int) int {
+	if x2 > x {
+		return x2
 	}
 	return x
 }
@@ -580,7 +586,7 @@ func loadFile(filename string, width int, height int) (board, error) {
 			y += 1
 			continue
 		}
-		b.set(x,y,r)
+		b.set(x, y, r)
 		x += 1
 	}
 }
@@ -662,9 +668,10 @@ func (b board) off(x int, y int) bool {
 	}
 	return false
 }
+
 // set() - Set a value but don't throw an error if outside the board
 func (b board) set(x int, y int, r rune) {
-	if b.off(x,y) {
+	if b.off(x, y) {
 		return
 	}
 	b[x][y] = r
@@ -685,7 +692,7 @@ func (b board) done(p coord) {
 }
 
 func (b board) get(x, y int) rune {
-	if b.off(x,y) {
+	if b.off(x, y) {
 		return ' '
 	}
 	return b[x][y]
@@ -705,13 +712,70 @@ func setMiddleMsgRaw(s tcell.Screen, msg string) {
 var setMiddleMsg func(string)
 var setLeftMsg func(string)
 var logfd *os.File
+
+type rectangle struct {
+	topLeft     coord
+	bottomRight coord
+}
+
 const (
-	// State of the user interface handling of keys
+	// KeysNormal State of the user interface handling of keys
 	KeysNormal = iota
 	KeysSelecting
 )
 
-var keyState = KeysNormal
+type editor struct {
+	ks int
+	pivot coord
+	selectionRectangle rectangle
+}
+
+var theEditor editor
+
+func newRectangle(x, y, x2, y2 int) rectangle {
+	return rectangle{
+		coord{minInt(x, x2), minInt(y, y2)},
+		coord{maxInt(x, x2), maxInt(y, y2)},
+	}
+}
+
+func (r *rectangle) inside(p coord) bool {
+	return p.x >= r.topLeft.x && p.x <= r.bottomRight.x && p.y >= r.topLeft.y && p.y <= r.bottomRight.y
+}
+
+func (e *editor) update(p coord) {
+	tl := coord{minInt(p.x, e.pivot.x), minInt(p.y, e.pivot.y)}
+	br := coord{maxInt(p.x, e.pivot.x), maxInt(p.y, e.pivot.y)}
+	e.selectionRectangle.topLeft = tl
+	e.selectionRectangle.bottomRight = br
+}
+
+func (e *editor) noShift() {
+	theEditor.ks = KeysNormal
+}
+
+func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) {
+	if modifiers & tcell.ModShift != 0 { // Shift key
+		if e.ks == KeysNormal {
+			// starting selection
+			e.pivot = cursor
+			e.selectionRectangle = newRectangle(cursor.x, cursor.y, cursorAfter.x, cursorAfter.y)
+		} else {
+			// already in selection mode
+			e.update(cursorAfter)
+		}
+		e.ks = KeysSelecting
+	}
+}
+
+func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
+		if 	e.ks == KeysSelecting && e.selectionRectangle.inside(p) {
+			return cellStyle.Background(tcell.ColorLightSlateGray)
+		}
+	return cellStyle
+}
+
+
 
 func main() {
 	logfd, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
@@ -791,6 +855,9 @@ func main() {
 		case *tcell.EventResize:
 			s.Sync()
 		case *tcell.EventKey:
+			if ev.Modifiers() & tcell.ModShift == 0 {
+				theEditor.noShift()
+			}
 			if ev.Key() == tcell.KeyCtrlQ {
 				quit()
 			}
@@ -829,18 +896,22 @@ func main() {
 				boardMutex.Unlock()
 			case tcell.KeyUp:
 				if cursorY != 0 {
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY-1}, ev.Modifiers())
 					cursorY -= 1
 				}
 			case tcell.KeyDown:
 				if cursorY < height-2 {
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY+1}, ev.Modifiers())
 					cursorY += 1
 				}
 			case tcell.KeyLeft:
 				if cursorX != 0 {
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX-1, cursorY}, ev.Modifiers())
 					cursorX -= 1
 				}
 			case tcell.KeyRight:
 				if cursorX < width-1 {
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX+1, cursorY}, ev.Modifiers())
 					cursorX += 1
 				}
 			case tcell.KeyF4: // for inside the debugger
@@ -958,7 +1029,8 @@ func view(s tcell.Screen, b board) {
 
 	for y := 0; y < height-1; y++ {
 		for x := 0; x < width; x++ {
-			s.SetContent(x, y, b[x][y], nil, styleOf(b[x][y]))
+			styl := theEditor.style(coord{x, y}, styleOf(b[x][y]))
+			s.SetContent(x, y, b[x][y], nil, styl)
 		}
 	}
 	for x := 0; x < width; x++ {
