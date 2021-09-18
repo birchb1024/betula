@@ -803,6 +803,17 @@ func (e *editor) paste(b board, cursor coord) {
 	}
 }
 
+func (e *editor) cut(b board, cursor coord) {
+	if e.ks == KeysNormal {
+		return
+	} else {
+		e.copy(b)
+		e.ks = KeysSelecting // TODO
+		e.delete(b, cursor)
+		e.ks = KeysNormal
+	}
+}
+
 func (e *editor) delete(b board, cursor coord) {
 	if e.ks == KeysNormal {
 		b.set(cursor.x, cursor.y, ' ')
@@ -902,7 +913,7 @@ func main() {
 		case *tcell.EventResize:
 			s.Sync()
 		case *tcell.EventKey:
-			if ev.Modifiers()&tcell.ModShift == 0 && ev.Key() != tcell.KeyDelete && ev.Key() != tcell.KeyCtrlC { // TODO
+			if ev.Modifiers()&tcell.ModShift == 0 && ev.Key() != tcell.KeyDelete && ev.Key() != tcell.KeyCtrlC  && ev.Key() != tcell.KeyCtrlX { // TODO
 				theEditor.noShift()
 			}
 			switch ev.Key() {
@@ -939,6 +950,10 @@ func main() {
 			case tcell.KeyCtrlV:
 				boardMutex.Lock()
 				theEditor.paste(theBoard, coord{cursorX, cursorY})
+				boardMutex.Unlock()
+			case tcell.KeyCtrlX:
+				boardMutex.Lock()
+				theEditor.cut(theBoard, coord{cursorX, cursorY})
 				boardMutex.Unlock()
 			case tcell.KeyBackspace2:
 				if cursorX > 0 {
