@@ -254,19 +254,60 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		}
 		if visited[p.x-1][p.y+1] == 'Y' {
 			// left
-			visited.done(p)
 			propogate(visited, b, p, coord{p.x + 1, p.y}, b[p.x-1][p.y+1])
 		} else if visited[p.x+1][p.y+1] == 'Y' {
 			// from right
-			visited.done(p)
 			propogate(visited, b, p, coord{p.x - 1, p.y}, b[p.x+1][p.y+1])
+		}
+	// Inverted Switch
+	case 's':
+		//   ...
+		//   .S.
+		//    .
+		//
+		// ignore if not the three inputs
+		// TODO DRY S
+		if !((f.x == p.x-1 && f.y == p.y) || (f.x == p.x+1 && f.y == p.y) || (f.x == p.x && f.y == p.y+1)) {
+			return
+		}
+		if visited.yes(p) {
+			return
+		}
+		if f.x == p.x && f.y == p.y+1 && visited[p.x][p.y-1] != 'Y' {
+			// new control signal
+			b.set(p.x, p.y-1, value)
+			visited.set(p.x, p.y-1, 'Y')
+		} else if f.x == p.x-1 && f.y == p.y && visited[p.x-1][p.y-1] != 'Y' {
+			// new left signal
+			b.set(p.x-1, p.y-1, value)
+			visited[p.x-1][p.y-1] = 'Y'
+		} else if f.x == p.x+1 && f.y == p.y && visited[p.x+1][p.y-1] != 'Y' {
+			// new right signal
+			b.set(p.x+1, p.y-1, value)
+			visited[p.x+1][p.y-1] = 'Y'
+		}
+		if visited[p.x][p.y-1] != 'Y' {
+			// No control signal so out
+			return
+		}
+		if !isZero(b[p.x][p.y-1]) {
+			return
+		}
+		if visited[p.x-1][p.y-1] == 'Y' {
+			// left
+			visited.done(p)
+			propogate(visited, b, p, coord{p.x + 1, p.y}, b[p.x-1][p.y-1])
+		} else if visited[p.x+1][p.y+1] == 'Y' {
+			// from right
+			visited.done(p)
+			propogate(visited, b, p, coord{p.x - 1, p.y}, b[p.x+1][p.y-1])
 		}
 	case 'L':
 		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
-		visited.set(p.x, p.y-1, 'Y')
+		visited.done(coord{p.x, p.y-1})
 		b.set(p.x, p.y-1, value)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
@@ -274,9 +315,9 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		if visited.yes(p) {
 			return
 		}
-		visited.done(p)
-		visited.set(p.x, p.y+1, 'Y')
 		b.set(p.x, p.y+1, value)
+		visited.done(p)
+		visited.done(coord{p.x, p.y+1})
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 
@@ -418,12 +459,14 @@ func interpreter(b board) {
 				}
 			}
 		}
-		// Find roots
+		// Find roots and reset indicators
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
 				switch b[x][y] {
 				case 'L':
 					b.set(x, y-1, ' ')
+				case 'J':
+					b.set(x, y+1, ' ')
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
@@ -640,6 +683,13 @@ func (b board) done(p coord) {
 	}
 	b[p.x][p.y] = 'Y'
 }
+
+func (b board) get(x, y int) rune {
+	if b.off(x,y) {
+		return ' '
+	}
+	return b[x][y]
+}
 func setMiddleMsgRaw(s tcell.Screen, msg string) {
 	w, _ := s.Size()
 	runes := []rune(msg)
@@ -655,6 +705,13 @@ func setMiddleMsgRaw(s tcell.Screen, msg string) {
 var setMiddleMsg func(string)
 var setLeftMsg func(string)
 var logfd *os.File
+const (
+	// State of the user interface handling of keys
+	KeysNormal = iota
+	KeysSelecting
+)
+
+var keyState = KeysNormal
 
 func main() {
 	logfd, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
@@ -754,13 +811,13 @@ func main() {
 				theBoard.set(cursorX, cursorY, ' ')
 				boardMutex.Unlock()
 				// follow wires
-				if !nonValue(theBoard[cursorX+1][cursorY]) {
+				if !nonValue(theBoard.get(cursorX+1, cursorY)) {
 					cursorX += 1
-				} else if !nonValue(theBoard[cursorX-1][cursorY]) {
+				} else if !nonValue(theBoard.get(cursorX-1, cursorY)) {
 					cursorX -= 1
-				} else if !nonValue(theBoard[cursorX][cursorY+1]) {
+				} else if !nonValue(theBoard.get(cursorX, cursorY+1)) {
 					cursorY += 1
-				} else if !nonValue(theBoard[cursorX][cursorY-1]) {
+				} else if !nonValue(theBoard.get(cursorX, cursorY-1)) {
 					cursorY -= 1
 				}
 			case tcell.KeyBackspace2:
@@ -846,6 +903,7 @@ var colors = map[rune]tcell.Color{
 	'R': tcell.ColorBlack,
 	'C': tcell.ColorDarkBlue,
 	'S': tcell.ColorBlack,
+	's': tcell.ColorDarkBlue,
 
 	'M': tcell.ColorBlack,
 
@@ -871,6 +929,7 @@ var backgrounds = map[rune]tcell.Color{
 	'L': tcell.ColorLightBlue,
 	'N': tcell.ColorLightPink,
 	'S': tcell.ColorLightPink,
+	's': tcell.ColorLightPink,
 
 	'M': tcell.ColorLightGoldenrodYellow,
 
