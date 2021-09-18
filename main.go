@@ -768,6 +768,20 @@ func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) 
 	}
 }
 
+func (e *editor) delete(b board, cursor coord) {
+	if e.ks == KeysNormal {
+		b.set(cursor.x, cursor.y, ' ')
+	} else {
+		// in selection mode
+		for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
+			for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
+				b.set(x, y, ' ')
+			}
+		}
+		e.ks = KeysNormal
+	}
+}
+
 func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
 		if 	e.ks == KeysSelecting && e.selectionRectangle.inside(p) {
 			return cellStyle.Background(tcell.ColorLightSlateGray)
@@ -855,14 +869,12 @@ func main() {
 		case *tcell.EventResize:
 			s.Sync()
 		case *tcell.EventKey:
-			if ev.Modifiers() & tcell.ModShift == 0 {
+			if ev.Modifiers() & tcell.ModShift == 0 && ev.Key() != tcell.KeyDelete { // TODO
 				theEditor.noShift()
 			}
-			if ev.Key() == tcell.KeyCtrlQ {
-				quit()
-			}
 			switch ev.Key() {
-
+			case tcell.KeyCtrlQ:
+				quit()
 			case tcell.KeyF5:
 				// Toggle the value under the cursor
 				boardMutex.Lock()
@@ -875,7 +887,7 @@ func main() {
 				boardMutex.Unlock()
 			case tcell.KeyDelete:
 				boardMutex.Lock()
-				theBoard.set(cursorX, cursorY, ' ')
+				theEditor.delete(theBoard, coord{cursorX, cursorY} )
 				boardMutex.Unlock()
 				// follow wires
 				if !nonValue(theBoard.get(cursorX+1, cursorY)) {
