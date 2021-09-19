@@ -111,7 +111,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 			visited[p.x-1][p.y] = 'Y'
 			modulo = rune2Int(b[p.x-1][p.y])
 			if modulo == 0 {
-				modulo = 10
+				modulo = 36
 			}
 			if p.x-1 > 0 && isDigit(b[p.x-2][p.y]) {
 				visited[p.x-2][p.y] = 'Y'
@@ -363,11 +363,30 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 }
 
 func int2Rune(i int) rune {
-	return rune('0' + i) // todo add hexadecimal
+	if i >= 0 && i <= 9 {
+		return rune('0' + i)
+	}
+	if i > 9 && i <= 9+26 {
+		return rune('a' + i-10)
+	}
+	return ' '
+}
+func isDigit(r rune) bool {
+	return rune2Int(r) != -1
+}
+func isDecimal(r rune) bool {
+	x := rune2Int(r)
+	return x>=0 && x<=9
 }
 
 func rune2Int(r rune) int {
-	return int(r - '0') // TODO add hexadecimal
+	if r >= '0' && r <= '9' {
+		return int(r - '0')
+	}
+	if r >= 'a' && r <= 'z' {
+		return int(r - 'a') + 10
+	}
+	return -1
 }
 
 func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func() bool) {
@@ -485,7 +504,7 @@ func interpreter(b board) {
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
 				if !visited.yes(coord{x, y}) {
-					if isDigit(b[x][y]) {
+					if isDecimal(b[x][y]) {
 						b.set(x, y, ' ')
 					}
 
@@ -495,9 +514,6 @@ func interpreter(b board) {
 		boardMutex.Unlock()
 		time.Sleep(50 * time.Millisecond)
 	}
-}
-func isDigit(r rune) bool {
-	return r >= '0' && r <= '9'
 }
 func render(s tcell.Screen, b board) {
 	for {
@@ -1079,8 +1095,20 @@ var backgrounds = map[rune]tcell.Color{
 
 func styleOf(r rune) tcell.Style {
 	var s = tcell.StyleDefault
-	if c, ok := colors[r]; ok {
-		s = s.Foreground(c)
+	if isDigit(r) {
+		if isDecimal(r) {
+			if r == '0' {
+				s = s.Foreground(tcell.ColorRed)
+			} else {
+				s = s.Foreground(tcell.ColorOrange)
+			}
+		} else {
+				s = s.Foreground(tcell.ColorBeige)
+		}
+	} else {
+		if c, ok := colors[r]; ok {
+			s = s.Foreground(c)
+		}
 	}
 	if c, ok := backgrounds[r]; ok {
 		s = s.Background(c)
