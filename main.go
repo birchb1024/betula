@@ -106,7 +106,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 	case 'C':
 		modulo := 2
 		fraction := 4
-		div := 1
+		div := 1 << fraction
 		if p.x > 0 && isDigit(b[p.x-1][p.y]) {
 			visited[p.x-1][p.y] = 'Y'
 			modulo = rune2Int(b[p.x-1][p.y])
@@ -127,13 +127,28 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		visited.done(p)
 		propogate(visited, b, p, coord{p.x, p.y - 1}, clockRune)
 		propogate(visited, b, p, coord{p.x, p.y + 1}, clockRune)
-		propogate(visited, b, p, coord{p.x - 1, p.y}, clockRune)
+		// propogate(visited, b, p, coord{p.x - 1, p.y}, clockRune)
 		propogate(visited, b, p, coord{p.x + 1, p.y}, clockRune)
 	case '-':
 		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
+		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
+		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
+
+	case ',':  // Pull-down
+		if visited.yes(p) {
+			return
+		}
+		visited.done(p)
+		if f.x != p.x-1 && f.x != p.x+1 { // as root so pulldown to '0'
+			value = '0'
+			b.set(p.x, p.y-1, '0')
+			visited.done(coord{p.x, p.y-1})
+		} else {
+			visited.set(p.x, p.y-1, ' ')
+		}
 		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
 	case '|':
@@ -463,6 +478,7 @@ func interpreter(b board) {
 		clockTicks += 1
 		boardMutex.Lock()
 		roots := make([]coord, 0)
+		pullDowns := make([]coord, 0)
 		visited = makeBoard(len(b), len(b[0]))
 		// Find and copy Macros # TODO recursive...
 		for y := 0; y < height-1; y++ {
@@ -501,6 +517,8 @@ func interpreter(b board) {
 					b.set(x, y+1, ' ')
 				case '*':
 					roots = append(roots, coord{x, y})
+				case ',':
+					pullDowns = append(pullDowns, coord{x, y})
 				case 'C':
 					roots = append(roots, coord{x, y})
 				case 'R':
@@ -513,7 +531,9 @@ func interpreter(b board) {
 		for _, p := range roots {
 			propogate(visited, b, nowhere, p, ' ')
 		}
-
+		for _, p := range pullDowns {
+			propogate(visited, b, nowhere, p, '0')
+		}
 		// Clear numeric values not reachable from roots unless it's a comment
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
@@ -1116,6 +1136,7 @@ var colors = map[rune]tcell.Color{
 	'J': tcell.ColorBlack,
 	'N': tcell.ColorBlue,
 	'*': tcell.ColorBlack,
+	',': tcell.ColorBlack,
 	'R': tcell.ColorBlack,
 	'C': tcell.ColorDarkBlue,
 	'S': tcell.ColorBlack,
@@ -1147,6 +1168,7 @@ var backgrounds = map[rune]tcell.Color{
 	'C': tcell.ColorLightGreen,
 	'*': tcell.ColorLightGreen,
 	'R': tcell.ColorLightGreen,
+	',': tcell.ColorLightGreen,
 }
 
 func styleOf(r rune) tcell.Style {
