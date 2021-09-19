@@ -207,6 +207,18 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 		}
 		visited.done(p)
 		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
+	// Exit
+	case 'E':
+		if visited.yes(p) {
+			return
+		}
+		visited.done(p)
+		if nonValue(value) || !isZero(value) {
+			comment := b.getComment(coord{p.x+1, p.y})
+			_, _ = fmt.Fprintf(os.Stderr, "E cell exit at location %d %d. Expected '0', got '%c' (%d) - message: '%s'\n", p.x, p.y, value, rune2Int(value), comment)
+			os.Exit(rune2Int(value))
+		}
+
 	// Invert
 	case 'N':
 		if visited.yes(p) {
@@ -477,10 +489,12 @@ func interpreter(b board) {
 				}
 			}
 		}
-		// Find roots and reset indicators
+		// Find comments, roots and reset indicators
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
-				switch b[x][y] {
+				switch b.get(x,y) {
+				case '_':
+					x = b.findCommentEnd(x+1, y)+1
 				case 'L':
 					b.set(x, y-1, ' ')
 				case 'J':
@@ -500,14 +514,18 @@ func interpreter(b board) {
 			propogate(visited, b, nowhere, p, ' ')
 		}
 
-		// Clear numeric values not reachable from roots
+		// Clear numeric values not reachable from roots unless it's a comment
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
+				val := b.get(x,y)
+				if val == '_' {
+					x = b.findCommentEnd(x+1, y)
+					continue
+				}
 				if !visited.yes(coord{x, y}) {
-					if isDecimal(b[x][y]) {
+					if isDecimal(val) {
 						b.set(x, y, ' ')
 					}
-
 				}
 			}
 		}
@@ -518,7 +536,8 @@ func interpreter(b board) {
 func render(s tcell.Screen, b board) {
 	for {
 		boardMutex.Lock()
-		setLeftMsg(fmt.Sprintf("%3d %3d", cursorX, cursorY))
+		val := b.get(cursorX, cursorY)
+		setLeftMsg(fmt.Sprintf("%3d %3d %c %2d", cursorX, cursorY, val, rune2Int(val)))
 		boardMutex.Unlock()
 		view(s, b)
 		s.Show()
@@ -712,6 +731,38 @@ func (b board) get(x, y int) rune {
 		return ' '
 	}
 	return b[x][y]
+}
+
+func (b board) findCommentEnd(x int, y int) int {
+	for ; x< len(b); x++ {
+		if b.get(x,y) == '_' {
+			break
+		}
+	}
+	return x
+}
+// getComment - look for the next comment on this row.
+// p.x may be to the left of the comment
+// if no comment found return empty string
+func (b board) getComment(p coord) interface{} {
+	msg := make([]rune,0)
+	x := p.x
+	for ; x< len(b); x++ {
+		if b.get(x, p.y) == '_' {
+			break
+		}
+	}
+	if x == len(b) {
+		return "" // did not find a comment
+	}
+	x += 1
+	for ; x< len(b); x++ {
+		if b.get(x, p.y) == '_' {
+			break
+		}
+		msg = append(msg, b.get(x, p.y))
+	}
+	return string(msg)
 }
 func setMiddleMsgRaw(s tcell.Screen, msg string) {
 	w, _ := s.Size()
@@ -1011,8 +1062,10 @@ func main() {
 				boardMutex.Lock()
 				theBoard.set(cursorX, cursorY, k)
 				boardMutex.Unlock()
-				// follow wires
+				// follow wires, user-friendly cursor positions
 				switch k {
+				case '*':
+						cursorX -= 1
 				case '|':
 					if nonValue(theBoard[cursorX][cursorY+1]) {
 						cursorY += 1
@@ -1051,6 +1104,10 @@ var colors = map[rune]tcell.Color{
 
 	'?': tcell.ColorRed,
 
+	'E': tcell.ColorBlack,
+
+	'_': tcell.ColorLightSeaGreen,
+
 	'L': tcell.ColorBlack,
 	'J': tcell.ColorBlack,
 	'N': tcell.ColorBlue,
@@ -1063,15 +1120,8 @@ var colors = map[rune]tcell.Color{
 	'M': tcell.ColorBlack,
 
 	'0': tcell.ColorRed,
-	'1': tcell.ColorOrange,
-	'2': tcell.ColorOrange,
-	'3': tcell.ColorOrange,
-	'4': tcell.ColorOrange,
-	'5': tcell.ColorOrange,
-	'6': tcell.ColorOrange,
-	'7': tcell.ColorOrange,
-	'8': tcell.ColorOrange,
 	'9': tcell.ColorOrange,
+	'a': tcell.ColorBeige,
 }
 var backgrounds = map[rune]tcell.Color{
 	'=': tcell.ColorOrange,
@@ -1079,6 +1129,8 @@ var backgrounds = map[rune]tcell.Color{
 	'#': tcell.ColorOrange,
 	'+': tcell.ColorOrange,
 	'^': tcell.ColorOrange,
+
+	'E': tcell.ColorRed,
 
 	'J': tcell.ColorLightBlue,
 	'L': tcell.ColorLightBlue,
@@ -1098,12 +1150,12 @@ func styleOf(r rune) tcell.Style {
 	if isDigit(r) {
 		if isDecimal(r) {
 			if r == '0' {
-				s = s.Foreground(tcell.ColorRed)
+				s = s.Foreground(colors['0'])
 			} else {
-				s = s.Foreground(tcell.ColorOrange)
+				s = s.Foreground(colors['9'])
 			}
 		} else {
-				s = s.Foreground(tcell.ColorBeige)
+				s = s.Foreground(colors['a'])
 		}
 	} else {
 		if c, ok := colors[r]; ok {
@@ -1122,16 +1174,26 @@ func styleOf(r rune) tcell.Style {
 
 func view(s tcell.Screen, b board) {
 	boardMutex.Lock()
-
+	commentStyle := tcell.StyleDefault.Foreground(colors['_'])
 	for y := 0; y < height-1; y++ {
+		inComment := false // parsing state
 		for x := 0; x < width; x++ {
-			styl := theEditor.style(coord{x, y}, styleOf(b[x][y]))
-			s.SetContent(x, y, b[x][y], nil, styl)
+			val := b.get(x, y)
+			sty := styleOf(val)
+			if val == '_' { // Scan and display the comment
+				sty = commentStyle
+				inComment = !inComment
+			}
+			if inComment {
+				sty = commentStyle
+			}
+			stile := theEditor.style(coord{x, y}, sty)
+			s.SetContent(x, y, b[x][y], nil, stile)
 		}
 	}
 	for x := 0; x < width; x++ {
 		s.SetContent(x, height-1, b[x][height-1], nil, tcell.StyleDefault)
 	}
-	s.SetContent(cursorX, cursorY, b[cursorX][cursorY], nil, tcell.StyleDefault.Reverse(true))
+	s.SetContent(cursorX, cursorY, b.get(cursorX, cursorY), nil, tcell.StyleDefault.Reverse(true))
 	boardMutex.Unlock()
 }
