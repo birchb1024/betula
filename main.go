@@ -214,14 +214,18 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 			return
 		}
 		visited.done(p)
-		propogate(visited, b, p, coord{p.x + 1, p.y}, value)
+		if !isZero(value) {
+			propogate(visited, b, p, coord{p.x + 1, p.y}, value)
+		}
 	// Diode
 	case '<':
 		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
-		propogate(visited, b, p, coord{p.x - 1, p.y}, value)
+		if !isZero(value) {
+			propogate(visited, b, p, coord{p.x - 1, p.y}, value)
+		}
 	// Exit
 	case 'E':
 		if visited.yes(p) {
