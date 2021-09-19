@@ -271,7 +271,7 @@ func propogate(visited board, b board, f coord, p coord, value rune) {
 			propogate(visited, b, p, coord{p.x - 1, p.y}, b[p.x+1][p.y+1])
 		}
 	// Inverted Switch
-	case 's':
+	case 'Z':
 		//   ...
 		//   .S.
 		//    .
@@ -859,6 +859,8 @@ func (e *editor) copy(b board) {
 			}
 		}
 		e.ks = KeysNormal
+		cursorX = e.selectionRectangle.topLeft.x
+		cursorY = e.selectionRectangle.topLeft.y
 	}
 }
 
@@ -892,6 +894,8 @@ func (e *editor) delete(b board, cursor coord) {
 			}
 		}
 		e.ks = KeysNormal
+		cursorX = e.selectionRectangle.topLeft.x
+		cursorY = e.selectionRectangle.topLeft.y
 	}
 }
 
@@ -1115,7 +1119,7 @@ var colors = map[rune]tcell.Color{
 	'R': tcell.ColorBlack,
 	'C': tcell.ColorDarkBlue,
 	'S': tcell.ColorBlack,
-	's': tcell.ColorDarkBlue,
+	'Z': tcell.ColorBlack,
 
 	'M': tcell.ColorBlack,
 
@@ -1136,7 +1140,7 @@ var backgrounds = map[rune]tcell.Color{
 	'L': tcell.ColorLightBlue,
 	'N': tcell.ColorLightPink,
 	'S': tcell.ColorLightPink,
-	's': tcell.ColorLightPink,
+	'Z': tcell.ColorLightPink,
 
 	'M': tcell.ColorLightGoldenrodYellow,
 
