@@ -226,6 +226,16 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 			os.Exit(rune2Int(value))
 		}
 
+	// Beep
+	case 'B':
+		if visited.yes(p) {
+			return
+		}
+		visited.done(p)
+		if !isZero(value) {
+			beep()
+		}
+
 	// Invert
 	case 'N':
 		if visited.yes(p) {
@@ -798,6 +808,8 @@ func setMiddleMsgRaw(s tcell.Screen, msg string) {
 
 var setMiddleMsg func(string)
 var setLeftMsg func(string)
+var beep func()
+
 var logfd *os.File
 
 type rectangle struct {
@@ -954,6 +966,10 @@ func main() {
 	}
 	setMiddleMsg = func(msg string) {
 		setMiddleMsgRaw(s, msg)
+	}
+
+	beep = func() {
+		_ = s.Beep()
 	}
 
 	// Set default text style
@@ -1129,6 +1145,7 @@ var colors = map[rune]tcell.Color{
 	'?': tcell.ColorRed,
 
 	'E': tcell.ColorBlack,
+	'B': tcell.ColorBlack,
 
 	'_': tcell.ColorLightSeaGreen,
 
@@ -1155,6 +1172,7 @@ var backgrounds = map[rune]tcell.Color{
 	'^': tcell.ColorOrange,
 
 	'E': tcell.ColorRed,
+	'B': tcell.ColorRed,
 
 	'J': tcell.ColorLightBlue,
 	'L': tcell.ColorLightBlue,
