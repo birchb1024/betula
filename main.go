@@ -130,6 +130,34 @@ func (r *relay) propagate(visited board, b board, f coord, p coord, value rune, 
 
 }
 
+type wire struct {
+	outputs []coord
+}
+
+func (w *wire) propagate(visited board, b board, p coord, value rune, multi map[coord]int) {
+	if visited.yes(p) {
+		return
+	}
+	visited.done(p)
+	for _, out := range w.outputs {
+		propagate(visited, b, p, out, value, multi)
+	}
+}
+
+type diode struct {
+	output coord
+}
+
+func (d *diode) propagate(visited board, b board, p coord, value rune, multi map[coord]int) {
+	if visited.yes(p) {
+		return
+	}
+	visited.done(p)
+	if !isZero(value) {
+		propagate(visited, b, p, d.output, value, multi)
+	}
+}
+
 func propagate(visited board, b board, f coord, p coord, value rune, multi map[coord]int) {
 
 	if b.off(p.x, p.y) {
@@ -139,157 +167,159 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 		return
 	}
 
-	switch b[p.x][p.y] {
+	switch b.getC(p) {
 
 	case '*':
 		//               .
 		//              3*.
 		//               .
-		if visited.yes(p) || visited.yes(coord{p.x - 1, p.y}) {
-			if value != b[p.x-1][p.y] {
-				setMiddleMsg(fmt.Sprintf("'*' short circuit at %d %d: '%c' != '%c'", p.x, p.y, b[p.x-1][p.y], value))
-			}
+		outputs := []coord{{p.x, p.y + 1}, {p.x + 1, p.y}, {p.x, p.y - 1}}
+		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
-		visited.set(p.x-1, p.y, 'Y')
 		constant := b.get(p.x-1, p.y)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, constant, multi)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, constant, multi)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, constant, multi)
+		for _, out := range outputs {
+			propagate(visited, b, p, out, constant, multi)
+		}
 
 	case 'R':
 		//               .
 		//              3R.
 		//               .
-		if visited.yes(p) || visited.yes(coord{p.x - 1, p.y}) {
+		maxrand := 1
+		maxrxy := coord{p.x-1, p.y}
+		maxrune := b.getC(maxrxy)
+		outputs := []coord{{p.x, p.y + 1}, {p.x + 1, p.y}, {p.x, p.y - 1}}
+		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
-		visited.set(p.x-1, p.y, 'Y')
-		maxr := 1
-		if isDigit(b[p.x-1][p.y]) {
-			maxr = rune2Int(b[p.x-1][p.y])
-			if maxr == 0 {
-				maxr = 1
+		if isDigit(maxrune) {
+			maxrand = rune2Int(maxrune)
+			if maxrand == 0 {
+				maxrand = 1
 			}
 		}
-		randi := int2Rune(rand.Intn(maxr))
-		propagate(visited, b, p, coord{p.x, p.y + 1}, randi, multi)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, randi, multi)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, randi, multi)
+		randi := int2Rune(rand.Intn(maxrand))
+		for _, out := range outputs {
+			propagate(visited, b, p, out, randi, multi)
+		}
 
 	case 'C':
+		//               .
+		//             fmC.
+		//               .
+		if visited.yes(p) {
+			return
+		}
+		outputs := []coord{{p.x, p.y + 1}, {p.x + 1, p.y}, {p.x, p.y - 1}}
+		moduloCo := coord{p.x-1, p.y}
+		moduloRune := b.getC(moduloCo)
+		fractionCo := coord{p.x-2, p.y}
+		fractionRune := b.getC(fractionCo)
 		modulo := 2
 		fraction := 4
 		div := 1 << fraction
-		if p.x > 0 && isDigit(b[p.x-1][p.y]) {
-			visited[p.x-1][p.y] = 'Y'
-			modulo = rune2Int(b[p.x-1][p.y])
+		if isDigit(moduloRune) {
+			modulo = rune2Int(moduloRune)
 			if modulo == 0 {
 				modulo = 36
 			}
-			if p.x-1 > 0 && isDigit(b[p.x-2][p.y]) {
-				visited[p.x-2][p.y] = 'Y'
-				fraction = rune2Int(b[p.x-2][p.y])
+			if isDigit(fractionRune) {
+				fraction = rune2Int(fractionRune)
 				div = 1 << fraction
 			}
 		}
 		clock := (clockTicks / div) % modulo
 		clockRune := int2Rune(clock)
-		if visited.yes(p) {
-			return
-		}
 		visited.done(p)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, clockRune, multi)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, clockRune, multi)
-		// propagate(visited, b, p, coord{p.x - 1, p.y}, clockRune)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, clockRune, multi)
+		for _, out := range outputs {
+			propagate(visited, b, p, out, clockRune, multi)
+		}
+
 	case '-':
-		if visited.yes(p) {
-			return
-		}
-		visited.done(p)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
+		leftRight := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
+		leftRight.propagate(visited, b, p, value, multi)
 
 	case '|':
-		if visited.yes(p) {
-			return
-		}
-		visited.done(p)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, value, multi)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, value, multi)
+		upDown := wire{[]coord{{p.x, p.y - 1}, {p.x, p.y + 1}}}
+		upDown.propagate(visited, b, p, value, multi)
+
 	case '/':
+		//
+		//      /     \
+		//
 		var end int
+		// Find the end
 		for end = p.x + 1; end < width-2; end++ {
-			if b[end][p.y] == '\\' {
+			if b.get(end, p.y) == '\\' {
 				break
 			}
 		}
-		if end == 0 {
+		if end == 0 { // no end so do nothing
 			return
 		}
 		if visited.yes(p) || visited.yes(coord{end, p.y}) {
 			return
 		}
 		visited.done(p)
-		visited[end][p.y] = 'Y'
+		visited.done(coord{end, p.y})
 		propagate(visited, b, p, coord{end + 1, p.y}, value, multi)
 		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
+
 	case '\\':
+		//
+		//      /     \
+		//
 		var begin int
+		// find the start
 		for begin = p.x - 1; begin > 0; begin-- {
-			if b[begin][p.y] == '/' {
+			if b.get(begin, p.y) == '/' {
 				break
 			}
 		}
-		if begin == 0 {
+		if begin == 0 { // no start so nothing to do
 			return
 		}
-		if visited.yes(p) || visited[begin][p.y] == 'Y' {
+		if visited.yes(p) || visited.yes(coord{begin, p.y}) {
 			return
 		}
 		visited.done(p)
-		visited[begin][p.y] = 'Y'
+		visited.done(coord{begin, p.y})
 		propagate(visited, b, p, coord{begin - 1, p.y}, value, multi)
 		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
+
 	case '@':
-		if visited.yes(p) {
-			return
-		}
-		visited.done(p)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, value, multi)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, value, multi)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
-	// Buffer left->right
+		blob := wire{[]coord{
+			{p.x, p.y - 1},
+			{p.x, p.y + 1},
+			{p.x + 1, p.y},
+			{p.x - 1, p.y},
+		}}
+		blob.propagate(visited, b, p, value, multi)
+
 	case '~':
+		// Buffer left->right
+		output := coord{p.x + 1, p.y}
 		if visited.yes(p) || f.x != p.x-1 || f.y != p.y {
 			return
 		}
 		visited.done(p)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, toBinary(value), multi)
-	// Diode
+		propagate(visited, b, p, output, toBinary(value), multi)
+
 	case '>':
-		if visited.yes(p) {
-			return
-		}
-		visited.done(p)
-		if !isZero(value) {
-			propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
-		}
-	// Diode
+		// Diode
+		lrdiode := diode{coord{p.x + 1, p.y}}
+		lrdiode.propagate(visited, b, p, value, multi)
+
 	case '<':
-		if visited.yes(p) {
-			return
-		}
-		visited.done(p)
-		if !isZero(value) {
-			propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
-		}
-	// Exit
+		// Diode
+		rldiode := diode{coord{p.x - 1, p.y}}
+		rldiode.propagate(visited, b, p, value, multi)
+
 	case 'E':
+		// Exit
 		if visited.yes(p) {
 			return
 		}
@@ -300,8 +330,8 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 			os.Exit(rune2Int(value))
 		}
 
-	// Beep
 	case 'B':
+		// Beep
 		if visited.yes(p) {
 			return
 		}
@@ -310,19 +340,19 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 			beep()
 		}
 
-	// Invert
 	case 'N':
-		if visited.yes(p) {
-			return
-		}
-		visited.done(p)
+		// Invert
+		inverter := wire{[]coord{
+			{p.x, p.y - 1},
+			{p.x, p.y + 1},
+			{p.x + 1, p.y},
+			{p.x - 1, p.y},
+		}}
 		inverted := cond(value, '0', '1')
-		propagate(visited, b, p, coord{p.x, p.y - 1}, inverted, multi)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, inverted, multi)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, inverted, multi)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, inverted, multi)
-	// Switch
+		inverter.propagate(visited, b, p, inverted, multi)
+
 	case 'S':
+		// Normally Open Relay Switch
 		//    .
 		//   .S.
 		//   ...
@@ -339,8 +369,8 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 		r.switchONfn = func (r rune) bool { return !isZero(r) }
 		r.propagate(visited, b, f, p, value, multi)
 
-	// Inverted Switch
 	case 'Z':
+		// Normally Closed Relay Switch
 		//   ...
 		//   .S.
 		//    .
@@ -358,61 +388,44 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 		r.propagate(visited, b, f, p, value, multi)
 
 	case 'L':
-		if visited.yes(p) {
-			return
-		}
-		visited.done(p)
-		visited.done(coord{p.x, p.y - 1})
+		// Lamp on top of wire
+		//       .
+		//		.L.
+		//
+		topLamp := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
 		b.set(p.x, p.y-1, value)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
-	case 'J':
-		if visited.yes(p) {
-			return
-		}
-		b.set(p.x, p.y+1, value)
-		visited.done(p)
-		visited.done(coord{p.x, p.y + 1})
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
+		topLamp.propagate(visited, b, p, value, multi)
 
-	//       ..
-	//       .=.
-	//       ..
-	//
+	case 'J':
+		// Lamp underneath wire
+		//
+		//		.J.
+		//       '
+		//
+		bottomLamp := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
+		b.set(p.x, p.y+1, value)
+		bottomLamp.propagate(visited, b, p, value, multi)
 
 	case '=':
-		equals := func() bool {
-			return b[p.x-1][p.y-1] == b[p.x-1][p.y+1]
+		//       ..
+		//       .=.
+		//       ..
+		//
+		equals := func(_, _ bool) bool {
+			return b.get(p.x-1, p.y-1) == b.get(p.x-1, p.y+1)
 		}
 		logicGate(visited, b, f, p, value, equals, multi)
 	case '.':
-		and := func() bool {
-			A := !isZero(b[p.x-1][p.y-1])
-			B := !isZero(b[p.x-1][p.y+1])
-			return A && B
-		}
+		and := func(A, B bool) bool { return A && B }
 		logicGate(visited, b, f, p, value, and, multi)
 	case '+':
-		or := func() bool {
-			A := !isZero(b[p.x-1][p.y-1])
-			B := !isZero(b[p.x-1][p.y+1])
-			return A || B
-		}
+		or := func(A, B bool) bool { return A || B }
 		logicGate(visited, b, f, p, value, or, multi)
 	case '#':
-		exclusiveOr := func() bool {
-			A := !isZero(b[p.x-1][p.y-1])
-			B := !isZero(b[p.x-1][p.y+1])
-			return A != B
-		}
+		exclusiveOr := func(A, B bool) bool { return A != B }
 		logicGate(visited, b, f, p, value, exclusiveOr, multi)
 	case '^':
-		nand := func() bool {
-			A := !isZero(b[p.x-1][p.y-1])
-			B := !isZero(b[p.x-1][p.y+1])
-			return !(A && B)
-		}
+		nand := func(A, B bool) bool { return !(A && B) }
 		logicGate(visited, b, f, p, value, nand, multi)
 	default:
 	}
@@ -445,7 +458,7 @@ func rune2Int(r rune) int {
 	return -1
 }
 
-func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func() bool, multi map[coord]int) {
+func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func(bool, bool) bool, multi map[coord]int) {
 	//
 	//    ..
 	//    .X
@@ -453,27 +466,26 @@ func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn
 	//
 	if f.x == p.x && f.y == p.y-1 {
 		b.set(p.x-1, p.y-1, value)
-		visited[p.x-1][p.y-1] = 'Y'
-	}
-	if f.x == p.x && f.y == p.y+1 {
+	} else if f.x == p.x && f.y == p.y+1 {
 		b.set(p.x-1, p.y+1, value)
-		visited[p.x-1][p.y+1] = 'Y'
+	} else {
+		return
 	}
-	//if visited[p.x-1][p.y+1] != 'Y' || visited[p.x-1][p.y-1] != 'Y' {
-	//	return
-	//}
-	if visited.yes(p) {
+	top := b.get(p.x-1, p.y-1)
+	bottom := b.get(p.x-1, p.y+1)
+
+	if visited.yes(p) || top == ' ' || bottom == ' ' {
 		return
 	}
 	visited.done(p)
-	if conditionFn() {
+	A := !isZero(top)
+	B := !isZero(bottom)
+	if conditionFn(A, B) {
 		b.set(p.x-1, p.y, '1')
-		visited[p.x-1][p.y] = 'Y'
 		propagate(visited, b, p, coord{p.x + 1, p.y}, '1', multi)
 		return
 	}
 	b.set(p.x-1, p.y, '0')
-	visited[p.x-1][p.y] = 'Y'
 	propagate(visited, b, p, coord{p.x + 1, p.y}, '0', multi)
 	return
 }
