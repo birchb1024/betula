@@ -572,44 +572,21 @@ func interpreter(b board) {
 				}
 			}
 		}
-		visits := make([]*board, 0)
 		multiPass := make(map[coord]int)
 
 		for pass := 1;  ; pass++ {
 			for _, p := range roots {
 				visited := makeBoard(width, height)
-				visits = append(visits, &visited)
 				propagate(visited, b, nowhere, p, ' ', multiPass)
 			}
-			if len(multiPass) == 0 || pass > 5 {
+			if len(multiPass) == 0 || pass > 4 {
 				break
 			}
 			for p := range multiPass {
 				visited := makeBoard(width, height)
-				visits = append(visits, &visited)
 				propagate(visited, b, nowhere, p, ' ', multiPass)
 			}
 		}
-		//// Clear numeric values not reachable from any of the roots unless it's a comment
-		//for y := 0; y < height-1; y++ {
-		//	for x := 0; x < width; x++ {
-		//		val := b.get(x, y)
-		//		if val == '_' {
-		//			x = b.findCommentEnd(x+1, y)
-		//			continue
-		//		}
-		//		forget := true
-		//		for _, v := range visits {
-		//			if v.yes(coord{x, y}) {
-		//				forget = false
-		//				break
-		//			}
-		//		}
-		//		if forget && isDecimal(val) {
-		//			// b.set(x, y, ' ')
-		//		}
-		//	}
-		//}
 		boardMutex.Unlock()
 		time.Sleep(50 * time.Millisecond)
 	}
