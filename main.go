@@ -55,8 +55,82 @@ type coord struct{ x, y int }
 var nowhere = coord{-1, -1}
 var clockTicks int
 
+type relay struct {
+	vSwitchState coord
+	vControl coord
+	vLeft coord
+	vRight coord
+	inControl coord
+	inLeft coord
+	inRight coord
+	defaultState rune
+	switchONfn func(rune) bool
+}
 
-func propagate(visited board, b board, f coord, p coord, value rune) {
+func (r *relay) propagate(visited board, b board, f coord, p coord, value rune, multi map[coord]int) {
+	// ignore if not the three inputs
+	if !(f == r.inLeft || f == r.inRight || f == r.inControl || f == nowhere) {
+		return
+	}
+	if visited.yes(p) {
+		return
+	}
+	// if not seen before
+	if _, ok:= multi[p] ; !ok {
+		multi[p] = 1
+		// reset variables
+		for _, v := range []coord{r.vLeft, r.vRight, r.vControl} {
+			b.setC(v, ' ')
+		}
+	}
+	if f == r.inControl {
+		// new control signal
+		b.setC(r.vControl, value)
+		var flag rune
+		if r.switchONfn(value) {
+			flag = '1'
+		} else {
+			flag = '0'
+		}
+		b.setC(r.vSwitchState, flag)
+	} else if f == r.inLeft {
+		// new left signal
+		b.setC(r.vLeft, value)
+	} else if f == r.inRight {
+		// new right signal
+		b.setC(r.vRight, value)
+	}
+
+	// wait for the end, if no control relax switch to default state
+	if _, ok:= multi[p] ; ok {
+		if b.getC(r.vControl) == ' ' && multi[p] > 3 {
+			b.setC(r.vSwitchState, r.defaultState)
+			b.setC(r.vControl, r.defaultState)
+		}
+	}
+	// if not enough inputs wait for next pass
+	if !(b.getC(r.vControl) != ' ' && (b.getC(r.vLeft) != ' ' || b.getC(r.vRight) != ' ') ) {
+		multi[p] += 1
+		return
+	}
+	delete(multi, p) // no further passes
+	if isZero(b.getC(r.vSwitchState)) {
+		visited.done(p)
+		return
+	}
+	if b.getC(r.vLeft) != ' ' {
+		// left
+		visited.done(p)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, b.getC(r.vLeft), multi)
+	} else if b.getC(r.vRight) != ' '  {
+		// from right
+		visited.done(p)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, b.getC(r.vRight), multi)
+	}
+
+}
+
+func propagate(visited board, b board, f coord, p coord, value rune, multi map[coord]int) {
 
 	if b.off(p.x, p.y) {
 		return
@@ -79,10 +153,10 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		}
 		visited.done(p)
 		visited.set(p.x-1, p.y, 'Y')
-		constant := b[p.x-1][p.y]
-		propagate(visited, b, p, coord{p.x, p.y + 1}, constant)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, constant)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, constant)
+		constant := b.get(p.x-1, p.y)
+		propagate(visited, b, p, coord{p.x, p.y + 1}, constant, multi)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, constant, multi)
+		propagate(visited, b, p, coord{p.x, p.y - 1}, constant, multi)
 
 	case 'R':
 		//               .
@@ -101,9 +175,9 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 			}
 		}
 		randi := int2Rune(rand.Intn(maxr))
-		propagate(visited, b, p, coord{p.x, p.y + 1}, randi)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, randi)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, randi)
+		propagate(visited, b, p, coord{p.x, p.y + 1}, randi, multi)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, randi, multi)
+		propagate(visited, b, p, coord{p.x, p.y - 1}, randi, multi)
 
 	case 'C':
 		modulo := 2
@@ -127,25 +201,25 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 			return
 		}
 		visited.done(p)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, clockRune)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, clockRune)
+		propagate(visited, b, p, coord{p.x, p.y - 1}, clockRune, multi)
+		propagate(visited, b, p, coord{p.x, p.y + 1}, clockRune, multi)
 		// propagate(visited, b, p, coord{p.x - 1, p.y}, clockRune)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, clockRune)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, clockRune, multi)
 	case '-':
 		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
 
 	case '|':
 		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, value)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, value)
+		propagate(visited, b, p, coord{p.x, p.y - 1}, value, multi)
+		propagate(visited, b, p, coord{p.x, p.y + 1}, value, multi)
 	case '/':
 		var end int
 		for end = p.x + 1; end < width-2; end++ {
@@ -161,8 +235,8 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		}
 		visited.done(p)
 		visited[end][p.y] = 'Y'
-		propagate(visited, b, p, coord{end + 1, p.y}, value)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value)
+		propagate(visited, b, p, coord{end + 1, p.y}, value, multi)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
 	case '\\':
 		var begin int
 		for begin = p.x - 1; begin > 0; begin-- {
@@ -178,24 +252,24 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		}
 		visited.done(p)
 		visited[begin][p.y] = 'Y'
-		propagate(visited, b, p, coord{begin - 1, p.y}, value)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value)
+		propagate(visited, b, p, coord{begin - 1, p.y}, value, multi)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
 	case '@':
 		if visited.yes(p) {
 			return
 		}
 		visited.done(p)
-		propagate(visited, b, p, coord{p.x, p.y - 1}, value)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, value)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value)
+		propagate(visited, b, p, coord{p.x, p.y - 1}, value, multi)
+		propagate(visited, b, p, coord{p.x, p.y + 1}, value, multi)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
 	// Buffer left->right
 	case '~':
 		if visited.yes(p) || f.x != p.x-1 || f.y != p.y {
 			return
 		}
 		visited.done(p)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, toBinary(value))
+		propagate(visited, b, p, coord{p.x + 1, p.y}, toBinary(value), multi)
 	// Diode
 	case '>':
 		if visited.yes(p) {
@@ -203,7 +277,7 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		}
 		visited.done(p)
 		if !isZero(value) {
-			propagate(visited, b, p, coord{p.x + 1, p.y}, value)
+			propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
 		}
 	// Diode
 	case '<':
@@ -212,7 +286,7 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		}
 		visited.done(p)
 		if !isZero(value) {
-			propagate(visited, b, p, coord{p.x - 1, p.y}, value)
+			propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
 		}
 	// Exit
 	case 'E':
@@ -243,106 +317,46 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		}
 		visited.done(p)
 		inverted := cond(value, '0', '1')
-		propagate(visited, b, p, coord{p.x, p.y - 1}, inverted)
-		propagate(visited, b, p, coord{p.x, p.y + 1}, inverted)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, inverted)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, inverted)
+		propagate(visited, b, p, coord{p.x, p.y - 1}, inverted, multi)
+		propagate(visited, b, p, coord{p.x, p.y + 1}, inverted, multi)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, inverted, multi)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, inverted, multi)
 	// Switch
 	case 'S':
 		//    .
 		//   .S.
 		//   ...
 		//
-		// ignore if not the three inputs
-		if !((f.x == p.x-1 && f.y == p.y) || (f.x == p.x+1 && f.y == p.y) || (f.x == p.x && f.y == p.y-1)) {
-			return
-		}
-		if visited.yes(p) {
-			return
-		}
-		if f.x == p.x && f.y == p.y-1 && visited[p.x][p.y+1] != 'Y' {
-			// new control signal
-			b.set(p.x, p.y+1, value)
-			visited.set(p.x, p.y+1, 'Y')
-		} else if f.x == p.x-1 && f.y == p.y && visited[p.x-1][p.y+1] != 'Y' {
-			// new left signal
-			b.set(p.x-1, p.y+1, value)
-			visited[p.x-1][p.y+1] = 'Y'
-		} else if f.x == p.x+1 && f.y == p.y && visited[p.x+1][p.y+1] != 'Y' {
-			// new right signal
-			b.set(p.x+1, p.y+1, value)
-			visited[p.x+1][p.y+1] = 'Y'
-		}
-		if visited[p.x][p.y+1] != 'Y' {
-			// No control signal so nothing
-			return
-		}
+		r := relay{}
+		r.vSwitchState = coord{p.x+1, p.y-1}
+		r.vControl = coord{p.x, p.y+1}
+		r.vLeft = coord{p.x-1, p.y+1}
+		r.vRight = coord{p.x+1, p.y+1}
+		r.inControl = coord{p.x, p.y-1}
+		r.inLeft = coord{p.x-1, p.y}
+		r.inRight = coord{p.x+1, p.y}
+		r.defaultState = '0' // OFF Normally Open (NO)
+		r.switchONfn = func (r rune) bool { return !isZero(r) }
+		r.propagate(visited, b, f, p, value, multi)
 
-		if visited[p.x-1][p.y+1] == 'Y' {
-			// left
-			if isZero(b[p.x][p.y+1]) {
-				propagate(visited, b, p, coord{p.x + 1, p.y}, ' ')
-			} else {
-				propagate(visited, b, p, coord{p.x + 1, p.y}, b[p.x-1][p.y+1])
-			}
-			visited.done(p)
-		} else if visited[p.x+1][p.y+1] == 'Y' {
-			// from right
-			if isZero(b[p.x][p.y+1]) {
-				propagate(visited, b, p, coord{p.x - 1, p.y}, ' ')
-			} else {
-				propagate(visited, b, p, coord{p.x - 1, p.y}, b[p.x+1][p.y+1])
-			}
-			visited.done(p)
-		}
 	// Inverted Switch
 	case 'Z':
 		//   ...
 		//   .S.
 		//    .
 		//
-		// ignore if not the three inputs
-		// TODO DRY S
-		if !((f.x == p.x-1 && f.y == p.y) || (f.x == p.x+1 && f.y == p.y) || (f.x == p.x && f.y == p.y+1)) {
-			return
-		}
-		if visited.yes(p) {
-			return
-		}
-		if f.x == p.x && f.y == p.y+1 {
-			// new control signal
-			b.set(p.x, p.y-1, value)
-			visited.set(p.x, p.y-1, 'Y')
-		} else if f.x == p.x-1 && f.y == p.y && visited[p.x-1][p.y-1] != 'Y' {
-			// new left signal
-			b.set(p.x-1, p.y-1, value)
-			visited[p.x-1][p.y-1] = 'Y'
-		} else if f.x == p.x+1 && f.y == p.y && visited[p.x+1][p.y-1] != 'Y' {
-			// new right signal
-			b.set(p.x+1, p.y-1, value)
-			visited[p.x+1][p.y-1] = 'Y'
-		}
-		if !visited.yes(coord{p.x, p.y-1}) {
-			// control is missing - do nothing
-			return
-		}
-		if visited[p.x-1][p.y-1] == 'Y' {
-			// left
-			if !isZero(b[p.x][p.y-1]) {
-				propagate(visited, b, p, coord{p.x + 1, p.y}, ' ')
-			} else {
-				propagate(visited, b, p, coord{p.x + 1, p.y}, b[p.x-1][p.y-1])
-			}
-			visited.done(p)
-		} else if visited[p.x+1][p.y+1] == 'Y' {
-			// from right
-			if !isZero(b[p.x][p.y-1]) {
-				propagate(visited, b, p, coord{p.x - 1, p.y}, ' ')
-			} else {
-				propagate(visited, b, p, coord{p.x - 1, p.y}, b[p.x+1][p.y-1])
-			}
-			visited.done(p)
-		}
+		r := relay{}
+		r.vSwitchState = coord{p.x+1, p.y+1}
+		r.vControl = coord{p.x, p.y-1}
+		r.vLeft = coord{p.x-1, p.y-1}
+		r.vRight = coord{p.x+1, p.y-1}
+		r.inControl = coord{p.x, p.y+1}
+		r.inLeft = coord{p.x-1, p.y}
+		r.inRight = coord{p.x+1, p.y}
+		r.defaultState = '1' // ON Normally Closed (NC)
+		r.switchONfn = isZero
+		r.propagate(visited, b, f, p, value, multi)
+
 	case 'L':
 		if visited.yes(p) {
 			return
@@ -350,8 +364,8 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		visited.done(p)
 		visited.done(coord{p.x, p.y - 1})
 		b.set(p.x, p.y-1, value)
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
 	case 'J':
 		if visited.yes(p) {
 			return
@@ -359,8 +373,8 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		b.set(p.x, p.y+1, value)
 		visited.done(p)
 		visited.done(coord{p.x, p.y + 1})
-		propagate(visited, b, p, coord{p.x + 1, p.y}, value)
-		propagate(visited, b, p, coord{p.x - 1, p.y}, value)
+		propagate(visited, b, p, coord{p.x + 1, p.y}, value, multi)
+		propagate(visited, b, p, coord{p.x - 1, p.y}, value, multi)
 
 	//       ..
 	//       .=.
@@ -371,35 +385,35 @@ func propagate(visited board, b board, f coord, p coord, value rune) {
 		equals := func() bool {
 			return b[p.x-1][p.y-1] == b[p.x-1][p.y+1]
 		}
-		logicGate(visited, b, f, p, value, equals)
+		logicGate(visited, b, f, p, value, equals, multi)
 	case '.':
 		and := func() bool {
 			A := !isZero(b[p.x-1][p.y-1])
 			B := !isZero(b[p.x-1][p.y+1])
 			return A && B
 		}
-		logicGate(visited, b, f, p, value, and)
+		logicGate(visited, b, f, p, value, and, multi)
 	case '+':
 		or := func() bool {
 			A := !isZero(b[p.x-1][p.y-1])
 			B := !isZero(b[p.x-1][p.y+1])
 			return A || B
 		}
-		logicGate(visited, b, f, p, value, or)
+		logicGate(visited, b, f, p, value, or, multi)
 	case '#':
 		exclusiveOr := func() bool {
 			A := !isZero(b[p.x-1][p.y-1])
 			B := !isZero(b[p.x-1][p.y+1])
 			return A != B
 		}
-		logicGate(visited, b, f, p, value, exclusiveOr)
+		logicGate(visited, b, f, p, value, exclusiveOr, multi)
 	case '^':
 		nand := func() bool {
 			A := !isZero(b[p.x-1][p.y-1])
 			B := !isZero(b[p.x-1][p.y+1])
 			return !(A && B)
 		}
-		logicGate(visited, b, f, p, value, nand)
+		logicGate(visited, b, f, p, value, nand, multi)
 	default:
 	}
 }
@@ -431,7 +445,7 @@ func rune2Int(r rune) int {
 	return -1
 }
 
-func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func() bool) {
+func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func() bool, multi map[coord]int) {
 	//
 	//    ..
 	//    .X
@@ -445,18 +459,22 @@ func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn
 		b.set(p.x-1, p.y+1, value)
 		visited[p.x-1][p.y+1] = 'Y'
 	}
-	if visited[p.x-1][p.y+1] != 'Y' || visited[p.x-1][p.y-1] != 'Y' {
+	//if visited[p.x-1][p.y+1] != 'Y' || visited[p.x-1][p.y-1] != 'Y' {
+	//	return
+	//}
+	if visited.yes(p) {
 		return
 	}
+	visited.done(p)
 	if conditionFn() {
 		b.set(p.x-1, p.y, '1')
 		visited[p.x-1][p.y] = 'Y'
-		propagate(visited, b, p, coord{p.x + 1, p.y}, '1')
+		propagate(visited, b, p, coord{p.x + 1, p.y}, '1', multi)
 		return
 	}
 	b.set(p.x-1, p.y, '0')
 	visited[p.x-1][p.y] = 'Y'
-	propagate(visited, b, p, coord{p.x + 1, p.y}, '0')
+	propagate(visited, b, p, coord{p.x + 1, p.y}, '0', multi)
 	return
 }
 
@@ -482,18 +500,21 @@ func expandMacro(pb board, home coord, name string) {
 			if home.x+x >= parentWidth || home.y+y >= parentHeight {
 				continue
 			}
+			if nonValue(mb[x][y]) {
+				continue
+			}
 			pb.set(home.x+x, home.y+y, mb[x][y])
 		}
 	}
 
 }
 func interpreter(b board) {
-	var visited board
+	//var visited board
 	for {
 		clockTicks += 1
 		boardMutex.Lock()
 		roots := make([]coord, 0)
-		visited = makeBoard(width, height)
+		//visited = makeBoard(width, height)
 		// Find and copy Macros # TODO recursive...
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
@@ -539,25 +560,44 @@ func interpreter(b board) {
 				}
 			}
 		}
+		visits := make([]*board, 0)
+		multiPass := make(map[coord]int)
 
-		for _, p := range roots {
-			propagate(visited, b, nowhere, p, ' ')
-		}
-		// Clear numeric values not reachable from roots unless it's a comment
-		for y := 0; y < height-1; y++ {
-			for x := 0; x < width; x++ {
-				val := b.get(x, y)
-				if val == '_' {
-					x = b.findCommentEnd(x+1, y)
-					continue
-				}
-				if !visited.yes(coord{x, y}) {
-					if isDecimal(val) {
-						b.set(x, y, ' ')
-					}
-				}
+		for pass := 1;  ; pass++ {
+			for _, p := range roots {
+				visited := makeBoard(width, height)
+				visits = append(visits, &visited)
+				propagate(visited, b, nowhere, p, ' ', multiPass)
+			}
+			if len(multiPass) == 0 || pass > 5 {
+				break
+			}
+			for p := range multiPass {
+				visited := makeBoard(width, height)
+				visits = append(visits, &visited)
+				propagate(visited, b, nowhere, p, ' ', multiPass)
 			}
 		}
+		//// Clear numeric values not reachable from any of the roots unless it's a comment
+		//for y := 0; y < height-1; y++ {
+		//	for x := 0; x < width; x++ {
+		//		val := b.get(x, y)
+		//		if val == '_' {
+		//			x = b.findCommentEnd(x+1, y)
+		//			continue
+		//		}
+		//		forget := true
+		//		for _, v := range visits {
+		//			if v.yes(coord{x, y}) {
+		//				forget = false
+		//				break
+		//			}
+		//		}
+		//		if forget && isDecimal(val) {
+		//			// b.set(x, y, ' ')
+		//		}
+		//	}
+		//}
 		boardMutex.Unlock()
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -735,10 +775,15 @@ func (b board) off(x int, y int) bool {
 
 // set() - Set a value but don't throw an error if outside the board
 func (b board) set(x int, y int, r rune) {
-	if b.off(x, y) {
+	b.setC(coord{x, y}, r)
+}
+
+// setC() - Set a value but don't throw an error if outside the board
+func (b board) setC(p coord, r rune) {
+	if b.off(p.x, p.y) {
 		return
 	}
-	b[x][y] = r
+	b[p.x][p.y] = r
 }
 
 func (b board) yes(p coord) bool {
@@ -755,11 +800,15 @@ func (b board) done(p coord) {
 	b[p.x][p.y] = 'Y'
 }
 
-func (b board) get(x, y int) rune {
-	if b.off(x, y) {
+func (b board) getC(p coord) rune {
+	if b.off(p.x, p.y) {
 		return ' '
 	}
-	return b[x][y]
+	return b[p.x][p.y]
+}
+
+func (b board) get(x, y int) rune {
+	return b.getC(coord{x, y})
 }
 
 func (b board) findCommentEnd(x int, y int) int {
