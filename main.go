@@ -411,10 +411,10 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 		//       .=.
 		//       ..
 		//
-		equals := func(_, _ bool) bool {
-			return b.get(p.x-1, p.y-1) == b.get(p.x-1, p.y+1)
+		equals := func(A, B rune) bool {
+			return A == B
 		}
-		logicGate(visited, b, f, p, value, equals, multi)
+		runeGate(visited, b, f, p, value, equals, multi)
 	case '.':
 		and := func(A, B bool) bool { return A && B }
 		logicGate(visited, b, f, p, value, and, multi)
@@ -458,36 +458,101 @@ func rune2Int(r rune) int {
 	return -1
 }
 
+type gate struct {
+	inTop coord
+	inBottom coord
+	vTopXY coord
+	vBottomXY coord
+	vOut coord
+	output coord
+	runeCondition func(rune, rune) bool
+	condition func(bool, bool) bool
+}
+
+func runeGate(visited board, b board, f coord, p coord, value rune, conditionFn func(rune, rune) bool, multi map[coord]int) {
+	//
+	//    ..
+	//    .X
+	//    ..
+	//
+	var g gate
+
+	g.inTop = coord{p.x, p.y - 1}
+	g.inBottom = coord{p.x, p.y + 1}
+	g.vTopXY = coord{p.x - 1, p.y - 1}
+	g.vBottomXY = coord{p.x - 1, p.y + 1}
+	g.vOut = coord{p.x - 1, p.y}
+	g.output = coord{p.x + 1, p.y}
+	g.runeCondition = conditionFn
+	g.propagate(visited, b, f, p, value, multi)
+}
+
 func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func(bool, bool) bool, multi map[coord]int) {
 	//
 	//    ..
 	//    .X
 	//    ..
 	//
-	if f.x == p.x && f.y == p.y-1 {
-		b.set(p.x-1, p.y-1, value)
-	} else if f.x == p.x && f.y == p.y+1 {
-		b.set(p.x-1, p.y+1, value)
-	} else {
-		return
-	}
-	top := b.get(p.x-1, p.y-1)
-	bottom := b.get(p.x-1, p.y+1)
+	var g gate
 
-	if visited.yes(p) || top == ' ' || bottom == ' ' {
+	g.inTop = coord{p.x, p.y - 1}
+	g.inBottom = coord{p.x, p.y + 1}
+	g.vTopXY = coord{p.x - 1, p.y - 1}
+	g.vBottomXY = coord{p.x - 1, p.y + 1}
+	g.vOut = coord{p.x - 1, p.y}
+	g.output = coord{p.x + 1, p.y}
+	g.condition = conditionFn
+	g.propagate(visited, b, f, p, value, multi)
+}
+func (g *gate) propagate(visited board, b board, f coord, p coord, value rune, multi map[coord]int) {
+
+	// ignore if not the two inputs
+	if !(f == g.inTop || f == g.inBottom ) {
 		return
 	}
+	if visited.yes(p) {
+		return
+	}
+	// if not seen before
+	if _, ok:= multi[p] ; !ok {
+		multi[p] = 1
+		// reset variables
+		for _, v := range []coord{g.vTopXY, g.vBottomXY, g.vOut} {
+			b.setC(v, ' ')
+		}
+	}
+	if f == g.inTop {
+		b.setC(g.vTopXY, value)
+	} else if f == g.inBottom {
+		b.setC(g.vBottomXY, value)
+	}
+	top := b.getC(g.vTopXY)
+	bottom := b.getC(g.vBottomXY)
+	// if not enough inputs wait for next pass
+	if top == ' ' || bottom == ' ' {
+		multi[p] += 1
+		return
+	}
+	// Have both inputs
+	delete(multi, p) // no further passes
 	visited.done(p)
+
 	A := !isZero(top)
 	B := !isZero(bottom)
-	if conditionFn(A, B) {
-		b.set(p.x-1, p.y, '1')
-		propagate(visited, b, p, coord{p.x + 1, p.y}, '1', multi)
-		return
+	b.setC(g.vTopXY, ' ')
+	b.setC(g.vBottomXY, ' ')
+	outputValue := '0'
+	if g.condition != nil {
+		if g.condition(A, B) {
+			outputValue = '1'
+		}
+	} else if g.runeCondition != nil {
+		if g.runeCondition(top, bottom) {
+			outputValue = '1'
+		}
 	}
-	b.set(p.x-1, p.y, '0')
-	propagate(visited, b, p, coord{p.x + 1, p.y}, '0', multi)
-	return
+	b.setC(g.vOut, outputValue)
+	propagate(visited, b, p, g.output, outputValue, multi)
 }
 
 var macros = make(map[string]board)
@@ -521,7 +586,6 @@ func expandMacro(pb board, home coord, name string) {
 
 }
 func interpreter(b board) {
-	//var visited board
 	for {
 		clockTicks += 1
 		boardMutex.Lock()
@@ -595,11 +659,11 @@ func render(s tcell.Screen, b board) {
 	for {
 		boardMutex.Lock()
 		val := b.get(cursorX, cursorY)
-		setLeftMsg(fmt.Sprintf("%3d %3d %c %2d", cursorX, cursorY, val, rune2Int(val)))
+		setLeftMsg(fmt.Sprintf("%d %3d %3d %c %2d", clockTicks, cursorX, cursorY, val, rune2Int(val)))
 		boardMutex.Unlock()
 		view(s, b)
 		s.Show()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 func minInt(x int, x2 int) int {
