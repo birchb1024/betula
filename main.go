@@ -63,6 +63,7 @@ type delay struct {
 	oldValue   rune
 	oldValueXY coord
 	outputXY   coord
+	nextValue   rune
 	selfXY     coord
 	lag        int
 }
@@ -70,25 +71,27 @@ type delay struct {
 var allDelays = map[coord]*delay{}
 
 func makeDelay(p coord, value rune, b board) *delay {
-	var del = delay{}
+	var d = delay{}
 
-	del.selfXY = p
-	del.inputXY = coord{p.x - 1, p.y}
-	del.outputXY = coord{p.x + 1, p.y}
-	del.oldValueXY = coord{p.x + 1, p.y - 1}
-	del.lagXY = coord{p.x, p.y - 1}
-	del.oldValue = value
-	del.lag = rune2Int(b.getC(del.lagXY))
-	if del.lag == -1 {
-		del.lag = 0
-		b.setC(del.lagXY, int2Rune(0))
+	d.selfXY = p
+	d.inputXY = coord{p.x - 1, p.y}
+	d.outputXY = coord{p.x + 1, p.y}
+	d.oldValueXY = coord{p.x + 1, p.y - 1}
+	d.lagXY = coord{p.x, p.y - 1}
+	d.oldValue = value
+	d.nextValue = 0
+	d.lag = rune2Int(b.getC(d.lagXY))
+	if d.lag == -1 {
+		d.lag = 0
+		b.setC(d.lagXY, int2Rune(0))
 	}
-	del.expiration = clockTicks + del.lag
-	return &del
+	d.expiration = clockTicks + d.lag
+	return &d
 }
 func (d *delay) reset(b board, value rune) {
 	// delay is over - use the new value
 	d.oldValue = value
+	d.nextValue = 0
 	b.setC(d.oldValueXY, value)
 	d.lag = rune2Int(b.getC(d.lagXY))
 	if d.lag == -1 {
@@ -98,7 +101,10 @@ func (d *delay) reset(b board, value rune) {
 	d.expiration = clockTicks + d.lag
 }
 
-func (d *delay) propagate(visited visitors, b board, value rune, multi map[coord]int) {
+func (d *delay) propagate(visited visitors, b board, f coord, value rune, multi map[coord]int) {
+	if f == d.inputXY {
+		d.nextValue = value
+	}
 	if visited.yes(d.selfXY) {
 		return
 	}
@@ -107,9 +113,11 @@ func (d *delay) propagate(visited visitors, b board, value rune, multi map[coord
 		propagate(visited, b, d.selfXY, d.outputXY, d.oldValue, multi)
 		return
 	}
-	// delay is over, send the saved value
-	propagate(visited, b, d.selfXY, d.outputXY, d.oldValue, multi)
-	d.reset(b, value)
+	// delay is over, reset if we have a new value 
+	if d.nextValue != 0 {
+		propagate(visited, b, d.selfXY, d.outputXY, d.oldValue, multi)
+		d.reset(b, d.nextValue)
+	}
 }
 
 type relay struct {
@@ -484,10 +492,7 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 			del = makeDelay(p, value, b)
 			allDelays[p] = del
 		}
-		if f == del.inputXY {
-			del.propagate(visited, b, value, multi)
-			return
-		}
+		del.propagate(visited, b, f, value, multi)
 
 	case '=':
 		//       ..
@@ -714,6 +719,8 @@ func interpreter(b board) {
 				case 'C':
 					roots = append(roots, coord{x, y})
 				case 'R':
+					roots = append(roots, coord{x, y})
+				case 'D':
 					roots = append(roots, coord{x, y})
 				default:
 				}
