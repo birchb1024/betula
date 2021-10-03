@@ -15,6 +15,7 @@ import (
 )
 
 type board [][]rune
+type visitors map[coord]int
 
 var width, height int
 var cursorX int
@@ -55,6 +56,62 @@ type coord struct{ x, y int }
 var nowhere = coord{-1, -1}
 var clockTicks int
 
+type delay struct {
+	expiration int
+	inputXY    coord
+	lagXY      coord
+	oldValue   rune
+	oldValueXY coord
+	outputXY   coord
+	selfXY     coord
+	lag        int
+}
+
+var allDelays = map[coord]*delay{}
+
+func makeDelay(p coord, value rune, b board) *delay {
+	var del = delay{}
+
+	del.selfXY = p
+	del.inputXY = coord{p.x - 1, p.y}
+	del.outputXY = coord{p.x + 1, p.y}
+	del.oldValueXY = coord{p.x + 1, p.y - 1}
+	del.lagXY = coord{p.x, p.y - 1}
+	del.oldValue = value
+	del.lag = rune2Int(b.getC(del.lagXY))
+	if del.lag == -1 {
+		del.lag = 0
+		b.setC(del.lagXY, int2Rune(0))
+	}
+	del.expiration = clockTicks + del.lag
+	return &del
+}
+func (d *delay) reset(b board, value rune) {
+	// delay is over - use the new value
+	d.oldValue = value
+	b.setC(d.oldValueXY, value)
+	d.lag = rune2Int(b.getC(d.lagXY))
+	if d.lag == -1 {
+		d.lag = 0
+		b.setC(d.lagXY, int2Rune(0))
+	}
+	d.expiration = clockTicks + d.lag
+}
+
+func (d *delay) propagate(visited visitors, b board, value rune, multi map[coord]int) {
+	if visited.yes(d.selfXY) {
+		return
+	}
+	visited.done(d.selfXY)
+	if d.expiration > clockTicks { // delay is not over
+		propagate(visited, b, d.selfXY, d.outputXY, d.oldValue, multi)
+		return
+	}
+	// delay is over, send the saved value
+	propagate(visited, b, d.selfXY, d.outputXY, d.oldValue, multi)
+	d.reset(b, value)
+}
+
 type relay struct {
 	vSwitchState coord
 	vControl coord
@@ -67,12 +124,12 @@ type relay struct {
 	switchONfn func(rune) bool
 }
 
-func (r *relay) propagate(visited board, b board, f coord, p coord, value rune, multi map[coord]int) {
+func (r *relay) propagate(visited visitors, b board, f coord, p coord, value rune, multi map[coord]int) {
 	// ignore if not the three inputs
 	if !(f == r.inLeft || f == r.inRight || f == r.inControl || f == nowhere) {
 		return
 	}
-	if visited.yes(p) {
+	if visited.gt(p, 3) {
 		return
 	}
 	// if not seen before
@@ -85,7 +142,9 @@ func (r *relay) propagate(visited board, b board, f coord, p coord, value rune, 
 	}
 	if f == r.inControl {
 		// new control signal
+		//b.setC(r.vControl, runeOR(value, b.getC(r.vControl)))
 		b.setC(r.vControl, value)
+
 		var flag rune
 		if r.switchONfn(value) {
 			flag = '1'
@@ -101,9 +160,8 @@ func (r *relay) propagate(visited board, b board, f coord, p coord, value rune, 
 		b.setC(r.vRight, value)
 	}
 
-	// wait for the end, if no control relax switch to default state
 	if _, ok:= multi[p] ; ok {
-		if b.getC(r.vControl) == ' ' && multi[p] > 3 {
+		if b.getC(r.vControl) == ' ' && multi[p] > 5 {
 			b.setC(r.vSwitchState, r.defaultState)
 			b.setC(r.vControl, r.defaultState)
 		}
@@ -127,14 +185,23 @@ func (r *relay) propagate(visited board, b board, f coord, p coord, value rune, 
 		visited.done(p)
 		propagate(visited, b, p, coord{p.x - 1, p.y}, b.getC(r.vRight), multi)
 	}
+}
 
+func runeOR(a rune, b rune) rune {
+	if !isZero(a) {
+		return a
+	}
+	if !isZero(b) {
+		return b
+	}
+	return '0'
 }
 
 type wire struct {
 	outputs []coord
 }
 
-func (w *wire) propagate(visited board, b board, p coord, value rune, multi map[coord]int) {
+func (w *wire) propagate(visited visitors, b board, p coord, value rune, multi map[coord]int) {
 	if visited.yes(p) {
 		return
 	}
@@ -148,7 +215,7 @@ type diode struct {
 	output coord
 }
 
-func (d *diode) propagate(visited board, b board, p coord, value rune, multi map[coord]int) {
+func (d *diode) propagate(visited visitors, b board, p coord, value rune, multi map[coord]int) {
 	if visited.yes(p) {
 		return
 	}
@@ -158,7 +225,7 @@ func (d *diode) propagate(visited board, b board, p coord, value rune, multi map
 	}
 }
 
-func propagate(visited board, b board, f coord, p coord, value rune, multi map[coord]int) {
+func propagate(visited visitors, b board, f coord, p coord, value rune, multi map[coord]int) {
 
 	if b.off(p.x, p.y) {
 		return
@@ -406,6 +473,22 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 		b.set(p.x, p.y+1, value)
 		bottomLamp.propagate(visited, b, p, value, multi)
 
+	case 'D':
+		// delay
+		//      ...
+		//		.D.
+		//
+		del, ok := allDelays[p]
+		if !ok {
+			// need a new backing object
+			del = makeDelay(p, value, b)
+			allDelays[p] = del
+		}
+		if f == del.inputXY {
+			del.propagate(visited, b, value, multi)
+			return
+		}
+
 	case '=':
 		//       ..
 		//       .=.
@@ -431,6 +514,7 @@ func propagate(visited board, b board, f coord, p coord, value rune, multi map[c
 	}
 }
 
+
 func int2Rune(i int) rune {
 	if i >= 0 && i <= 9 {
 		return rune('0' + i)
@@ -455,7 +539,7 @@ func rune2Int(r rune) int {
 	if r >= 'a' && r <= 'z' {
 		return int(r-'a') + 10
 	}
-	return -1
+	return -1 // TODO dummy spit
 }
 
 type gate struct {
@@ -469,7 +553,7 @@ type gate struct {
 	condition func(bool, bool) bool
 }
 
-func runeGate(visited board, b board, f coord, p coord, value rune, conditionFn func(rune, rune) bool, multi map[coord]int) {
+func runeGate(visited visitors, b board, f coord, p coord, value rune, conditionFn func(rune, rune) bool, multi map[coord]int) {
 	//
 	//    ..
 	//    .X
@@ -487,7 +571,7 @@ func runeGate(visited board, b board, f coord, p coord, value rune, conditionFn 
 	g.propagate(visited, b, f, p, value, multi)
 }
 
-func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn func(bool, bool) bool, multi map[coord]int) {
+func logicGate(visited visitors, b board, f coord, p coord, value rune, conditionFn func(bool, bool) bool, multi map[coord]int) {
 	//
 	//    ..
 	//    .X
@@ -504,10 +588,10 @@ func logicGate(visited board, b board, f coord, p coord, value rune, conditionFn
 	g.condition = conditionFn
 	g.propagate(visited, b, f, p, value, multi)
 }
-func (g *gate) propagate(visited board, b board, f coord, p coord, value rune, multi map[coord]int) {
+func (g *gate) propagate(visited visitors, b board, f coord, p coord, value rune, multi map[coord]int) {
 
 	// ignore if not the two inputs
-	if !(f == g.inTop || f == g.inBottom ) {
+	if !(f == g.inTop || f == g.inBottom || f == nowhere) {
 		return
 	}
 	if visited.yes(p) {
@@ -590,7 +674,6 @@ func interpreter(b board) {
 		clockTicks += 1
 		boardMutex.Lock()
 		roots := make([]coord, 0)
-		//visited = makeBoard(width, height)
 		// Find and copy Macros # TODO recursive...
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
@@ -636,23 +719,23 @@ func interpreter(b board) {
 				}
 			}
 		}
-		multiPass := make(map[coord]int)
+		multiPass := make(visitors)
 
 		for pass := 1;  ; pass++ {
 			for _, p := range roots {
-				visited := makeBoard(width, height)
+				visited := make(visitors)
 				propagate(visited, b, nowhere, p, ' ', multiPass)
 			}
 			if len(multiPass) == 0 || pass > 4 {
 				break
 			}
 			for p := range multiPass {
-				visited := makeBoard(width, height)
+				visited := make(map[coord]int)
 				propagate(visited, b, nowhere, p, ' ', multiPass)
 			}
 		}
 		boardMutex.Unlock()
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(43 * time.Millisecond)
 	}
 }
 func render(s tcell.Screen, b board) {
@@ -663,7 +746,7 @@ func render(s tcell.Screen, b board) {
 		boardMutex.Unlock()
 		view(s, b)
 		s.Show()
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 func minInt(x int, x2 int) int {
@@ -839,19 +922,29 @@ func (b board) setC(p coord, r rune) {
 	b[p.x][p.y] = r
 }
 
-func (b board) yes(p coord) bool {
-	if b.off(p.x, p.y) {
+func (v visitors) gt(p coord, max int) bool {
+	val, ok := v[p]
+	if !ok{
 		return false
 	}
-	return b[p.x][p.y] == 'Y'
+	if val > max {
+		return true
+	}
+	return false
 }
 
-func (b board) done(p coord) {
-	if b.off(p.x, p.y) {
-		return
-	}
-	b[p.x][p.y] = 'Y'
+func (v visitors) yes(p coord) bool {
+	return v.gt(p, 0)
 }
+
+func (v visitors) done(p coord) {
+	val, ok := v[p]
+	if !ok{
+		v[p] = 1
+	}
+	v[p] = val + 1
+}
+
 
 func (b board) getC(p coord) rune {
 	if b.off(p.x, p.y) {
@@ -1254,6 +1347,7 @@ var colors = map[rune]tcell.Color{
 	'L': tcell.ColorBlack,
 	'J': tcell.ColorBlack,
 	'N': tcell.ColorBlue,
+	'D': tcell.ColorBlue,
 	'*': tcell.ColorBlack,
 	'R': tcell.ColorBlack,
 	'C': tcell.ColorDarkBlue,
@@ -1281,6 +1375,7 @@ var backgrounds = map[rune]tcell.Color{
 	'N': tcell.ColorLightPink,
 	'S': tcell.ColorLightPink,
 	'Z': tcell.ColorLightPink,
+	'D': tcell.ColorLightPink,
 
 	'M': tcell.ColorLightGoldenrodYellow,
 
