@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"github.com/gdamore/tcell"
 	"io"
@@ -11,7 +12,6 @@ import (
 
 	"log"
 	"os"
-	//	"strconv"
 )
 
 type board [][]rune
@@ -113,7 +113,7 @@ func (d *delay) propagate(visited visitors, b board, f coord, value rune, multi 
 		propagate(visited, b, d.selfXY, d.outputXY, d.oldValue, multi)
 		return
 	}
-	// delay is over, reset if we have a new value 
+	// delay is over, reset if we have a new value
 	if d.nextValue != 0 {
 		propagate(visited, b, d.selfXY, d.outputXY, d.oldValue, multi)
 		d.reset(b, d.nextValue)
@@ -742,7 +742,7 @@ func interpreter(b board) {
 			}
 		}
 		boardMutex.Unlock()
-		time.Sleep(43 * time.Millisecond)
+		time.Sleep(*clockSpeed)
 	}
 }
 func render(s tcell.Screen, b board) {
@@ -753,7 +753,7 @@ func render(s tcell.Screen, b board) {
 		boardMutex.Unlock()
 		view(s, b)
 		s.Show()
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(*renderTime)
 	}
 }
 func minInt(x int, x2 int) int {
@@ -1140,7 +1140,17 @@ func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
 	return cellStyle
 }
 
+var renderTime = flag.Duration("renderTime", 100 * time.Millisecond, "How frequently to refresh the screen.")
+var clockSpeed = flag.Duration("clockSpeed", 50 * time.Millisecond, "How frequently to run the interpreter.")
+
+// var prof interface{ Stop() } // Keep this line
+
 func main() {
+	//// CPUProfile enables cpu profiling. 									// Keep this lines
+	//prof = profile.Start(profile.CPUProfile, profile.ProfilePath(".")) 	// Keep this line
+
+	flag.Parse()
+
 	logfd, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		log.Fatal(err)
@@ -1154,7 +1164,6 @@ func main() {
 		for i, r := range runes {
 			theBoard.set(i, height-1, r)
 		}
-		//		_, _ = fmt.Fprintf(logfd, "%s\n", msg)
 	}
 
 	filename := "untitled.betula"
@@ -1186,8 +1195,8 @@ func main() {
 	cursorX = screenWidth / 2
 	cursorY = screenHeight / 2
 
-	if len(os.Args) > 1 {
-		filename = os.Args[1]
+	if flag.Arg(0) != "" {
+		filename = flag.Arg(0)
 		var err error
 		fileWidth, fileHeight, err := sizeOfFile(filename)
 		if err != nil {
@@ -1208,6 +1217,7 @@ func main() {
 	quit := func() {
 		s.Fini()
 		s.EnableMouse()
+		// prof.Stop() // Keep this line
 		os.Exit(0)
 	}
 	go interpreter(theBoard)
@@ -1354,8 +1364,8 @@ var colors = map[rune]tcell.Color{
 	'L': tcell.ColorBlack,
 	'J': tcell.ColorBlack,
 	'N': tcell.ColorBlue,
-	'D': tcell.ColorBlue,
 	'*': tcell.ColorBlack,
+	'D': tcell.ColorBlack,
 	'R': tcell.ColorBlack,
 	'C': tcell.ColorDarkBlue,
 	'S': tcell.ColorBlack,
@@ -1382,16 +1392,21 @@ var backgrounds = map[rune]tcell.Color{
 	'N': tcell.ColorLightPink,
 	'S': tcell.ColorLightPink,
 	'Z': tcell.ColorLightPink,
-	'D': tcell.ColorLightPink,
 
 	'M': tcell.ColorLightGoldenrodYellow,
 
 	'C': tcell.ColorLightGreen,
 	'*': tcell.ColorLightGreen,
 	'R': tcell.ColorLightGreen,
+	'D': tcell.ColorLightGreen,
 }
 
+var runeStyleCache = map[rune]tcell.Style{} // for performance // TODO hide in closure
 func styleOf(r rune) tcell.Style {
+	result, ok := runeStyleCache[r]
+	if ok {
+		return result
+	}
 	var s = tcell.StyleDefault
 	if isDigit(r) {
 		if isDecimal(r) {
@@ -1414,7 +1429,9 @@ func styleOf(r rune) tcell.Style {
 	if r == '*' {
 		s = s.Bold(true)
 	}
+	runeStyleCache[r] = s
 	return s
+
 
 }
 
