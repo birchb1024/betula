@@ -153,13 +153,13 @@ func (r *relay) propagate(visited visitors, b board, f coord, p coord, value run
 		//b.setC(r.vControl, runeOR(value, b.getC(r.vControl)))
 		b.setC(r.vControl, value)
 
-		var flag rune
+		var indicator rune
 		if r.switchONfn(value) {
-			flag = '1'
+			indicator = '1'
 		} else {
-			flag = '0'
+			indicator = '0'
 		}
-		b.setC(r.vSwitchState, flag)
+		b.setC(r.vSwitchState, indicator)
 	} else if f == r.inLeft {
 		// new left signal
 		b.setC(r.vLeft, value)
@@ -318,8 +318,29 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		leftRight.propagate(visited, b, p, value, multi)
 
 	case '|':
-		upDown := wire{[]coord{{p.x, p.y - 1}, {p.x, p.y + 1}}}
-		upDown.propagate(visited, b, p, value, multi)
+		//         .
+		//        .|.
+		//         .
+		left := coord{p.x-1, p.y}
+		right := coord{p.x+1, p.y}
+		up := coord{p.x, p.y-1}
+		down := coord{p.x, p.y+1}
+		if (f == left || f == right ) && b.getC(left) == '-' && b.getC(right) == '-' {
+			//
+			//    -|-        must be crossing wires to prevent stack overflow
+			//
+			// if signal is left<>right then pass through horizontally
+			leftRightUnder := wire{[]coord{right, left}}
+			for _, out := range leftRightUnder.outputs {
+				propagate(visited, b, p, out, value, multi)
+			}
+			return
+		}
+		if f == up || f == down {
+			// normal top<>bottom
+			upDown := wire{[]coord{{p.x, p.y - 1}, {p.x, p.y + 1}}}
+			upDown.propagate(visited, b, p, value, multi)
+		}
 
 	case '/':
 		//
