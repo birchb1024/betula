@@ -1163,6 +1163,7 @@ func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
 
 var renderTime = flag.Duration("renderTime", 100 * time.Millisecond, "How frequently to refresh the screen.")
 var clockSpeed = flag.Duration("clockSpeed", 50 * time.Millisecond, "How frequently to run the interpreter.")
+var renderStyle = flag.String("renderStyle", "unicode", "Render style [plain, unicode], default unicode.")
 
 // var prof interface{ Stop() } // Keep this line
 
@@ -1362,6 +1363,23 @@ func main() {
 	}
 }
 
+func fancy(r rune) rune {
+	if *renderStyle != "unicode" {
+		return r
+	}
+	f, ok := boxDrawRunes[r]
+	if !ok {
+		return r
+	}
+	return f
+}
+var boxDrawRunes = map[rune]rune{
+	'|' : '│',
+	'-' : '─',
+	'@' : '█',
+	// lookups here: https://unicode-table.com/en/blocks/box-drawing/
+}
+
 var colors = map[rune]tcell.Color{
 	'=': tcell.ColorBlack,
 	'.': tcell.ColorBlack,
@@ -1472,11 +1490,11 @@ func view(s tcell.Screen, b board) {
 				sty = commentStyle
 			}
 			stile := theEditor.style(coord{x, y}, sty)
-			s.SetContent(x, y, b[x][y], nil, stile)
+			s.SetContent(x, y, fancy(b.get(x, y)), nil, stile)
 		}
 	}
 	for x := 0; x < width; x++ {
-		s.SetContent(x, height-1, b[x][height-1], nil, tcell.StyleDefault)
+		s.SetContent(x, height-1, fancy(b[x][height-1]), nil, tcell.StyleDefault)
 	}
 	s.SetContent(cursorX, cursorY, b.get(cursorX, cursorY), nil, tcell.StyleDefault.Reverse(true))
 	boardMutex.Unlock()
