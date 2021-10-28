@@ -1,18 +1,40 @@
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                                                     
-                                        0*------->-@-----<-@         
-                                                   |       |         
-                                                   |0   11 |         
-                                 1*---->-----------S--@-D--@         
-                                                  1   |              
-                                                      @-------------L
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+               _ Latching relay circuits _                                                                                                                            
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                        _data_     *                                                                                                                                  
+                                   |0                                                                                                                                 
+                        _+ve_1*----S----------------@----@                _ This circuit as per http://www.relaiscomputer.nl/index.php/elements Latch_                
+                              |   101               |    |                _ The inputs are by current (ie floating == 0) _                                            
+                              |          1          |111 |         1      _ So the switches provide that _                                                            
+                              @---------Z-----J-----S-D--@---------L      _ Note that the output follows the input always, clear is not an enable _                   
+                                        |1    1     11                                                                                                                
+                                        |                                                                                                                             
+                                       0*                                                                                                                             
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                                                                                                                                                      
+                                        1*------->-@-<--@                 _ This is a simliar circuit except it uses diodes instead of switches to get 0 == floating _
+                                                   |1 11|                 _ In the interpreter floating values are not propogated. _                                  
+                        _!clear_ 1*---->-----------S-@D-@                                                                                                             
+                                                   1 |             1                                                                                                  
+                                                     @-------------L                                                                                                  
