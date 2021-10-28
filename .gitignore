@@ -17,3 +17,5 @@
 betula
 /foo.log
 /log.txt
+cpu.pprof
+profile00*gif

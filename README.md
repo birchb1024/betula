@@ -1,9 +1,19 @@
 # betula
 A live-coding logic simulation with a text user interface
 
-Screencast vide here: https://asciinema.org/a/uf0ggfZg8WoMhFvCAGMi9YKry
+Screencast video here: https://asciinema.org/a/uf0ggfZg8WoMhFvCAGMi9YKry
 
-Screenshot
+Screenshots
 
-![Screenshot](./Betula_screenshot1.png "Screenshot 1")
+Logic  Gates
+
+![Screenshot](./screenshot_logic.png "Logic")
+
+Relay Circuits
+
+![Screenshot](./screenshot_brinkman01.png "Relay circuits")
+
+Wolffia Relay Computer
+
+![Screenshot](./screenshot_wolffia_encoder.png "Wolffia encoder")
 
