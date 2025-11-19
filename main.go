@@ -1104,8 +1104,12 @@ func (e *editor) update(p coord) {
 	e.selectionRectangle.bottomRight = br
 }
 
-func (e *editor) noShift() {
+func (e *editor) normalMode() {
 	theEditor.ks = KeysNormal
+}
+
+func (e *editor) selectMode() {
+	theEditor.ks = KeysSelecting
 }
 
 func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) {
@@ -1191,6 +1195,10 @@ func main() {
 	//// CPUProfile enables cpu profiling. 									// Keep this lines
 	//prof = profile.Start(profile.CPUProfile, profile.ProfilePath(".")) 	// Keep this line
 
+	// TERM variable must get set to screen before tcell.NewScreen() is called.
+	if _, ok := os.LookupEnv("TERM"); !ok {
+		log.Fatalf("ERROR: TERM environment variable must be set, maybe try  'TERM=xterm-256color'")
+	}
 	flag.Parse()
 
 	logfd, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
@@ -1274,9 +1282,9 @@ func main() {
 		case *tcell.EventResize:
 			s.Sync()
 		case *tcell.EventKey:
-			if ev.Modifiers()&tcell.ModShift == 0 && ev.Key() != tcell.KeyDelete && ev.Key() != tcell.KeyCtrlC && ev.Key() != tcell.KeyCtrlX { // TODO
-				theEditor.noShift()
-			}
+			//if ev.Modifiers()&tcell.ModShift == 0 && ev.Key() != tcell.KeyDelete && ev.Key() != tcell.KeyCtrlC && ev.Key() != tcell.KeyCtrlX { // TODO
+			//	theEditor.normalMode()
+			//}
 			switch ev.Key() {
 			case tcell.KeyCtrlQ:
 				quit()
@@ -1304,6 +1312,10 @@ func main() {
 				} else if !nonValue(theBoard.get(cursorX, cursorY-1)) {
 					cursorY -= 1
 				}
+			case tcell.KeyInsert:
+				theEditor.selectMode()
+			case tcell.KeyEscape:
+				theEditor.normalMode()
 			case tcell.KeyCtrlC:
 				boardMutex.Lock()
 				theEditor.copy(theBoard)
@@ -1325,7 +1337,7 @@ func main() {
 				boardMutex.Unlock()
 			case tcell.KeyUp:
 				if cursorY != 0 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY - 1}, ev.Modifiers())
+				theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY - 1}, ev.Modifiers())
 					cursorY -= 1
 				}
 			case tcell.KeyDown:
@@ -1420,8 +1432,10 @@ var colors = map[rune]tcell.Color{
 
 	'_': tcell.ColorLightSeaGreen,
 
-	'L': tcell.ColorBlack,
+	'H': tcell.ColorBlack,
 	'J': tcell.ColorBlack,
+	'K': tcell.ColorBlack,
+	'L': tcell.ColorBlack,
 	'N': tcell.ColorBlue,
 	'*': tcell.ColorBlack,
 	'D': tcell.ColorBlack,
@@ -1446,7 +1460,9 @@ var backgrounds = map[rune]tcell.Color{
 	'E': tcell.ColorRed,
 	'B': tcell.ColorRed,
 
+	'H': tcell.ColorLightBlue,
 	'J': tcell.ColorLightBlue,
+	'K': tcell.ColorLightBlue,
 	'L': tcell.ColorLightBlue,
 	'N': tcell.ColorLightPink,
 	'S': tcell.ColorLightPink,
