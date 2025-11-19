@@ -1,14 +1,16 @@
 package main
 
 import (
-	"bufio"
-	"flag"
-	"fmt"
-	"github.com/gdamore/tcell"
-	"io"
-	"math/rand"
-	"sync"
-	"time"
+
+"bufio"
+"flag"
+"fmt"
+"io"
+"math/rand"
+"sync"
+"time"
+
+"github.com/gdamore/tcell"
 
 	"log"
 	"os"
@@ -482,6 +484,24 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		r.defaultState = '1' // ON Normally Closed (NC)
 		r.switchONfn = isZero
 		r.propagate(visited, b, f, p, value, multi)
+
+	case 'H':
+		// Lamp on left of wire
+		//       .
+		//		.H
+		//       .
+		leftLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
+		b.set(p.x-1, p.y, value)
+		leftLamp.propagate(visited, b, p, value, multi)
+
+	case 'K':
+		// Lamp on right of wire
+		//       .
+		//		 K.
+		//       .
+		rightLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
+		b.set(p.x+1, p.y, value)
+		rightLamp.propagate(visited, b, p, value, multi)
 
 	case 'L':
 		// Lamp on top of wire
