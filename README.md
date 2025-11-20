@@ -64,3 +64,10 @@ Wolffia Relay Computer
 
 ![Screenshot](./screenshot_wolffia_encoder.png "Wolffia encoder")
 
+# Development
+
+Build for IDE attach to process debugger
+
+```bash
+go build -gcflags="all=-N -l"
+```

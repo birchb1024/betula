@@ -790,7 +790,7 @@ func render(s tcell.Screen, b board) {
 	for {
 		boardMutex.Lock()
 		val := b.get(cursorX, cursorY)
-		setLeftMsg(fmt.Sprintf("%d %3d %3d %c %2d", clockTicks, cursorX, cursorY, val, rune2Int(val)))
+		setLeftMsg(fmt.Sprintf("%d %3d %3d %c %2d %s %s", clockTicks, cursorX, cursorY, val, rune2Int(val), theEditor.mode(), middleMessage))
 		boardMutex.Unlock()
 		view(s, b)
 		s.Show()
@@ -1038,19 +1038,13 @@ func (b board) getComment(p coord) interface{} {
 	return string(msg)
 }
 func setMiddleMsgRaw(s tcell.Screen, msg string) {
-	w, _ := s.Size()
-	runes := []rune(msg)
-	for i, r := range runes {
-		if i >= w {
-			break
-		}
-		s.SetContent(i, 0, r, nil, tcell.StyleDefault)
-	}
-	_, _ = fmt.Fprintf(logfd, "%s\n", msg)
+	middleMessage = msg
 }
 
+var middleMessage = ""
 var setMiddleMsg func(string)
 var setLeftMsg func(string)
+
 var beep func()
 
 var logfd *os.File
@@ -1113,16 +1107,12 @@ func (e *editor) selectMode() {
 }
 
 func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) {
-	if modifiers&tcell.ModShift != 0 { // Shift key
-		if e.ks == KeysNormal {
-			// starting selection
-			e.pivot = cursor
-			e.selectionRectangle = newRectangle(cursor.x, cursor.y, cursorAfter.x, cursorAfter.y)
-		} else {
-			// already in selection mode
-			e.update(cursorAfter)
-		}
-		e.ks = KeysSelecting
+	if e.ks == KeysNormal {
+		e.pivot = cursor
+		e.selectionRectangle = newRectangle(cursor.x, cursor.y, cursorAfter.x, cursorAfter.y)
+	} else {
+		// already in selection mode
+		e.update(cursorAfter)
 	}
 }
 
@@ -1154,28 +1144,27 @@ func (e *editor) paste(b board, cursor coord) {
 func (e *editor) cut(b board, cursor coord) {
 	if e.ks == KeysNormal {
 		return
-	} else {
-		e.copy(b)
-		e.ks = KeysSelecting // TODO
-		e.delete(b, cursor)
-		e.ks = KeysNormal
 	}
+	e.copy(b)
+	e.ks = KeysSelecting // TODO
+	e.delete(b, cursor)
+	e.ks = KeysNormal
 }
 
 func (e *editor) delete(b board, cursor coord) {
 	if e.ks == KeysNormal {
 		b.set(cursor.x, cursor.y, ' ')
-	} else {
-		// in selection mode
-		for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
-			for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
-				b.set(x, y, ' ')
-			}
-		}
-		e.ks = KeysNormal
-		cursorX = e.selectionRectangle.topLeft.x
-		cursorY = e.selectionRectangle.topLeft.y
+		return
 	}
+	// in selection mode
+	for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
+		for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
+			b.set(x, y, ' ')
+		}
+	}
+	e.ks = KeysNormal
+	cursorX = e.selectionRectangle.topLeft.x
+	cursorY = e.selectionRectangle.topLeft.y
 }
 
 func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
@@ -1183,6 +1172,14 @@ func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
 		return cellStyle.Background(tcell.ColorLightSlateGray)
 	}
 	return cellStyle
+}
+
+func (e *editor) mode() string {
+	switch e.ks {
+		case KeysNormal:  return "ED "
+		case KeysSelecting: return "SEL"
+	}
+	return "???"
 }
 
 var renderTime = flag.Duration("renderTime", 100 * time.Millisecond, "How frequently to refresh the screen.")
@@ -1201,7 +1198,8 @@ func main() {
 	}
 	flag.Parse()
 
-	logfd, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
+	var err error
+	logfd, err = os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1312,7 +1310,7 @@ func main() {
 				} else if !nonValue(theBoard.get(cursorX, cursorY-1)) {
 					cursorY -= 1
 				}
-			case tcell.KeyInsert:
+			case tcell.KeyF1: // Because mac does not recognise KeyInsert believe it or not https://www.reddit.com/r/mac/comments/960ny0/how_to_use_the_insert_key_on_an_external_keyboard/
 				theEditor.selectMode()
 			case tcell.KeyEscape:
 				theEditor.normalMode()
@@ -1337,7 +1335,7 @@ func main() {
 				boardMutex.Unlock()
 			case tcell.KeyUp:
 				if cursorY != 0 {
-				theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY - 1}, ev.Modifiers())
+					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY - 1}, ev.Modifiers())
 					cursorY -= 1
 				}
 			case tcell.KeyDown:
@@ -1408,7 +1406,6 @@ func fancy(r rune) rune {
 var boxDrawRunes = map[rune]rune{
 	'|' : '│',
 	'-' : '─',
-	'@' : '█',
 	// lookups here: https://unicode-table.com/en/blocks/box-drawing/
 }
 
@@ -1456,6 +1453,8 @@ var backgrounds = map[rune]tcell.Color{
 	'#': tcell.ColorOrange,
 	'+': tcell.ColorOrange,
 	'^': tcell.ColorOrange,
+
+	'@': tcell.ColorBlue,
 
 	'E': tcell.ColorRed,
 	'B': tcell.ColorRed,
