@@ -197,16 +197,6 @@ func (r *relay) propagate(visited visitors, b board, f coord, p coord, value run
 	}
 }
 
-func runeOR(a rune, b rune) rune {
-	if !isZero(a) {
-		return a
-	}
-	if !isZero(b) {
-		return b
-	}
-	return '0'
-}
-
 type wire struct {
 	outputs []coord
 }
@@ -491,7 +481,7 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//		.H
 		//       .
 		leftLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
-		b.set(p.x-1, p.y, value)
+		b.set(coord{p.x-1, p.y}, value)
 		leftLamp.propagate(visited, b, p, value, multi)
 
 	case 'K':
@@ -500,7 +490,7 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//		 K.
 		//       .
 		rightLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
-		b.set(p.x+1, p.y, value)
+		b.set(coord{p.x+1, p.y}, value)
 		rightLamp.propagate(visited, b, p, value, multi)
 
 	case 'L':
@@ -509,7 +499,7 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//		.L.
 		//
 		topLamp := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
-		b.set(p.x, p.y-1, value)
+		b.set(coord{p.x, p.y-1}, value)
 		topLamp.propagate(visited, b, p, value, multi)
 
 	case 'J':
@@ -519,7 +509,7 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//       '
 		//
 		bottomLamp := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
-		b.set(p.x, p.y+1, value)
+		b.set(coord{p.x, p.y+1}, value)
 		bottomLamp.propagate(visited, b, p, value, multi)
 
 	case 'D':
@@ -710,12 +700,13 @@ func expandMacro(pb board, home coord, name string) {
 			if nonValue(mb[x][y]) {
 				continue
 			}
-			pb.set(home.x+x, home.y+y, mb[x][y])
+			pb.set(coord{home.x+x, home.y+y}, mb[x][y])
 		}
 	}
 
 }
 func interpreter(b board) {
+	// for IDE time.Sleep(10 * time.Second)
 	for {
 		clockTicks += 1
 		boardMutex.Lock()
@@ -752,9 +743,9 @@ func interpreter(b board) {
 				case '_':
 					x = b.findCommentEnd(x+1, y) + 1
 				case 'L':
-					b.set(x, y-1, ' ')
+					b.set(coord{x, y-1}, ' ')
 				case 'J':
-					b.set(x, y+1, ' ')
+					b.set(coord{x, y+1}, ' ')
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
@@ -787,6 +778,7 @@ func interpreter(b board) {
 	}
 }
 func render(s tcell.Screen, b board) {
+	// time.Sleep(10 * time.Second)
 	for {
 		boardMutex.Lock()
 		val := b.get(cursorX, cursorY)
@@ -874,7 +866,7 @@ func loadFile(filename string, width int, height int) (board, error) {
 			y += 1
 			continue
 		}
-		b.set(x, y, r)
+		b.set(coord{x, y}, r)
 		x += 1
 	}
 }
@@ -957,9 +949,29 @@ func (b board) off(x int, y int) bool {
 	return false
 }
 
+// Where are the active cells values - for clean deletion
+var valuesOverlay = map[rune][]coord{
+	'L': {coord{0, -1}},
+	'J': {coord{0, 1}},
+}
+
 // set() - Set a value but don't throw an error if outside the board
-func (b board) set(x int, y int, r rune) {
-	b.setC(coord{x, y}, r)
+func (b board) set(p coord, r rune) {
+	b.setC(coord{p.x, p.y}, r)
+}
+
+// setAndClearValues() - Set a value and clean out active cells surrounding values
+func (b board) setAndClearValues(p coord, r rune) {
+	v := b[p.x][p.y]
+	// If it's an active cell, remove its surrounding output values
+	if !nonValue(v) {
+		if valueLocations, ok := valuesOverlay[v]; ok {
+			for _, loc := range valueLocations {
+				b.setC(coord{p.x+loc.x, p.y+loc.y},  ' ')
+			}
+		}
+	}
+	b.setC(p, r)
 }
 
 // setC() - Set a value but don't throw an error if outside the board
@@ -1106,7 +1118,7 @@ func (e *editor) selectMode(cursor coord) {
 	e.selectionRectangle = newRectangle(cursor.x, cursor.y, cursor.x, cursor.y)
 }
 
-func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) {
+func (e *editor) move(cursorAfter coord) {
 	if e.ks == KeysSelecting {
 		e.updateSelection(cursorAfter)
 	}
@@ -1120,7 +1132,7 @@ func (e *editor) copy(b board) {
 		e.cutPasteBuffer = makeBoard(e.selectionRectangle.bottomRight.x-e.selectionRectangle.topLeft.x+1, e.selectionRectangle.bottomRight.y-e.selectionRectangle.topLeft.y+1)
 		for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
 			for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
-				e.cutPasteBuffer.set(x-e.selectionRectangle.topLeft.x, y-e.selectionRectangle.topLeft.y, b.get(x, y))
+				e.cutPasteBuffer.set(coord{x-e.selectionRectangle.topLeft.x, y-e.selectionRectangle.topLeft.y}, b.get(x, y))
 			}
 		}
 		e.ks = KeysNormal
@@ -1132,7 +1144,7 @@ func (e *editor) copy(b board) {
 func (e *editor) paste(b board, cursor coord) {
 	for x := 0; x < len(e.cutPasteBuffer); x++ {
 		for y := 0; y < len(e.cutPasteBuffer[x]); y++ {
-			b.set(cursor.x+x, cursor.y+y, e.cutPasteBuffer.get(x, y))
+			b.set(coord{cursor.x+x, cursor.y+y}, e.cutPasteBuffer.get(x, y))
 		}
 	}
 }
@@ -1149,13 +1161,13 @@ func (e *editor) cut(b board, cursor coord) {
 
 func (e *editor) delete(b board, cursor coord) {
 	if e.ks == KeysNormal {
-		b.set(cursor.x, cursor.y, ' ')
+		b.set(cursor, ' ')
 		return
 	}
 	// in selection mode
 	for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
 		for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
-			b.set(x, y, ' ')
+			b.set(coord{x, y}, ' ')
 		}
 	}
 	e.ks = KeysNormal
@@ -1206,7 +1218,7 @@ func main() {
 	setLeftMsg = func(msg string) {
 		runes := []rune(msg)
 		for i, r := range runes {
-			theBoard.set(i, height-1, r)
+			theBoard.set(coord{i, height-1}, r)
 		}
 	}
 
@@ -1287,9 +1299,9 @@ func main() {
 				boardMutex.Lock()
 				r := theBoard[cursorX][cursorY]
 				if nonValue(r) || r == '0' {
-					theBoard.set(cursorX, cursorY, '1')
+					theBoard.set(coord{cursorX, cursorY}, '1')
 				} else {
-					theBoard.set(cursorX, cursorY, '0')
+					theBoard.set(coord{cursorX, cursorY}, '0')
 				}
 				boardMutex.Unlock()
 			case tcell.KeyDelete:
@@ -1327,19 +1339,18 @@ func main() {
 					cursorX -= 1
 				}
 				boardMutex.Lock()
-				theBoard.set(cursorX, cursorY, ' ')
+				theBoard.set(coord{cursorX, cursorY}, ' ')
 				boardMutex.Unlock()
 			case tcell.KeyUp:
 				if cursorY != 0 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY - 1}, ev.Modifiers())
+					theEditor.move(coord{cursorX, cursorY - 1})
 					cursorY -= 1
 				}
 			case tcell.KeyPgUp:
-				var oldCursorY = cursorY
 				if cursorY != 0 {
 					if !nonValue(theBoard[cursorX][cursorY-1]) {
 						cursorY -= 1
-						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					} else {
 						for y := cursorY-1; y >= 0; y -= 1 {
 							c := theBoard[cursorX][y]
@@ -1352,20 +1363,19 @@ func main() {
 								break
 							}
 						}
-						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					}
 				}
 			case tcell.KeyDown:
 				if cursorY < height-2 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX, cursorY + 1}, ev.Modifiers())
+					theEditor.move(coord{cursorX, cursorY + 1})
 					cursorY += 1
 				}
 			case tcell.KeyPgDn:
-				var oldCursorY = cursorY
 				if cursorY != height-2 {
 					if !nonValue(theBoard[cursorX][cursorY+1]) {
 						cursorY += 1
-						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					} else {
 						for y := cursorY+1; y <= height-2; y += 1 {
 							c := theBoard[cursorX][y]
@@ -1378,20 +1388,19 @@ func main() {
 								break
 							}
 						}
-						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					}
 				}
 			case tcell.KeyLeft:
 				if cursorX != 0 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX - 1, cursorY}, ev.Modifiers())
+					theEditor.move(coord{cursorX - 1, cursorY})
 					cursorX -= 1
 				}
 			case tcell.KeyHome:
-				var oldCursorX = cursorX
 				if cursorX != 0 {
 					if !nonValue(theBoard[cursorX-1][cursorY]) {
 						cursorX -= 1
-						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					} else {
 						for x := cursorX-1; x >= 0; x -= 1 {
 							c := theBoard[x][cursorY]
@@ -1404,20 +1413,19 @@ func main() {
 								break
 							}
 						}
-						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					}
 				}
 			case tcell.KeyRight:
 				if cursorX < width-1 {
-					theEditor.move(coord{cursorX, cursorY}, coord{cursorX + 1, cursorY}, ev.Modifiers())
+					theEditor.move(coord{cursorX + 1, cursorY})
 					cursorX += 1
 				}
 			case tcell.KeyEnd:
-				var oldCursorX = cursorX
 				if cursorX < width-1 {
 					if !nonValue(theBoard[cursorX+1][cursorY]) {
 						cursorX += 1
-						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					} else {
 						for x := cursorX+1; x <= width-1 ; x += 1 {
 							c := theBoard[x][cursorY]
@@ -1430,7 +1438,7 @@ func main() {
 								break
 							}
 						}
-						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+						theEditor.move(coord{cursorX, cursorY})
 					}
 				}
 			case tcell.KeyF4: // for inside the debugger
@@ -1444,7 +1452,7 @@ func main() {
 			case tcell.KeyRune:
 				k := ev.Rune()
 				boardMutex.Lock()
-				theBoard.set(cursorX, cursorY, k)
+				theBoard.setAndClearValues(coord{cursorX, cursorY}, k)
 				boardMutex.Unlock()
 				// follow wires, user-friendly cursor positions
 				switch k {
