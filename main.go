@@ -951,6 +951,7 @@ func (b board) off(x int, y int) bool {
 
 // Where are the active cells values - for clean deletion
 var valuesOverlay = map[rune][]coord{
+	'C': {coord{-1, 0}, coord{-2, 0}},
 	'L': {coord{0, -1}},
 	'J': {coord{0, 1}},
 }
@@ -963,15 +964,13 @@ func (b board) set(p coord, r rune) {
 // setAndClearValues() - Set a value and clean out active cells surrounding values
 func (b board) setAndClearValues(p coord, r rune) {
 	v := b[p.x][p.y]
-	// If it's an active cell, remove its surrounding output values
-	if !nonValue(v) {
-		if valueLocations, ok := valuesOverlay[v]; ok {
-			for _, loc := range valueLocations {
-				b.setC(coord{p.x+loc.x, p.y+loc.y},  ' ')
-			}
+	b.setC(p, r)
+	// If it's an active cell, remove its surrounding input/output values
+	if valueLocations, ok := valuesOverlay[v]; ok {
+		for _, loc := range valueLocations {
+			b.setC(coord{p.x+loc.x, p.y+loc.y},  ' ')
 		}
 	}
-	b.setC(p, r)
 }
 
 // setC() - Set a value but don't throw an error if outside the board
@@ -1161,13 +1160,13 @@ func (e *editor) cut(b board, cursor coord) {
 
 func (e *editor) delete(b board, cursor coord) {
 	if e.ks == KeysNormal {
-		b.set(cursor, ' ')
+		b.setAndClearValues(cursor, ' ')
 		return
 	}
 	// in selection mode
 	for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
 		for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
-			b.set(coord{x, y}, ' ')
+			b.setAndClearValues(coord{x, y}, ' ')
 		}
 	}
 	e.ks = KeysNormal
