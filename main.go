@@ -1337,18 +1337,23 @@ func main() {
 			case tcell.KeyPgUp:
 				var oldCursorY = cursorY
 				if cursorY != 0 {
-					for y := cursorY-1; y >= 0; y -= 1 {
-						c := theBoard[cursorX][y]
-						if !nonValue(c) {
-							cursorY = y+1
-							break
+					if !nonValue(theBoard[cursorX][cursorY-1]) {
+						cursorY -= 1
+						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+					} else {
+						for y := cursorY-1; y >= 0; y -= 1 {
+							c := theBoard[cursorX][y]
+							if !nonValue(c) {
+								cursorY = y+1
+								break
+							}
+							if y == 0 {
+								cursorY = 0
+								break
+							}
 						}
-						if y == 0 {
-							cursorY = 0
-							break
-						}
+						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
 					}
-					theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
 				}
 			case tcell.KeyDown:
 				if cursorY < height-2 {
@@ -1357,19 +1362,24 @@ func main() {
 				}
 			case tcell.KeyPgDn:
 				var oldCursorY = cursorY
-				if cursorY != 0 {
-					for y := cursorY; y <= height-2; y += 1 {
-						c := theBoard[cursorX][y]
-						if !nonValue(c) {
-							cursorY = y-1
-							break
+				if cursorY != height-2 {
+					if !nonValue(theBoard[cursorX][cursorY+1]) {
+						cursorY += 1
+						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+					} else {
+						for y := cursorY+1; y <= height-2; y += 1 {
+							c := theBoard[cursorX][y]
+							if !nonValue(c) {
+								cursorY = y-1
+								break
+							}
+							if y == height-2 {
+								cursorY = y
+								break
+							}
 						}
-						if y == height-2 {
-							cursorY = y
-							break
-						}
+						theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
 					}
-					theEditor.move(coord{cursorX, oldCursorY}, coord{cursorX, cursorY}, ev.Modifiers())
 				}
 			case tcell.KeyLeft:
 				if cursorX != 0 {
@@ -1379,23 +1389,49 @@ func main() {
 			case tcell.KeyHome:
 				var oldCursorX = cursorX
 				if cursorX != 0 {
-					for x := cursorX-1; x >= 0; x -= 1 {
-						c := theBoard[x][cursorY]
-						if !nonValue(c) {
-							cursorX = x+1
-							break
+					if !nonValue(theBoard[cursorX-1][cursorY]) {
+						cursorX -= 1
+						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+					} else {
+						for x := cursorX-1; x >= 0; x -= 1 {
+							c := theBoard[x][cursorY]
+							if !nonValue(c) {
+								cursorX = x+1
+								break
+							}
+							if x == 0 {
+								cursorX = 0
+								break
+							}
 						}
-						if x == 0 {
-							cursorX = 0
-							break
-						}
+						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
 					}
-					theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
 				}
 			case tcell.KeyRight:
 				if cursorX < width-1 {
 					theEditor.move(coord{cursorX, cursorY}, coord{cursorX + 1, cursorY}, ev.Modifiers())
 					cursorX += 1
+				}
+			case tcell.KeyEnd:
+				var oldCursorX = cursorX
+				if cursorX < width-1 {
+					if !nonValue(theBoard[cursorX+1][cursorY]) {
+						cursorX += 1
+						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+					} else {
+						for x := cursorX+1; x <= width-1 ; x += 1 {
+							c := theBoard[x][cursorY]
+							if !nonValue(c) {
+								cursorX = x-1
+								break
+							}
+							if x == width-1 {
+								cursorX = width-1
+								break
+							}
+						}
+						theEditor.move(coord{oldCursorX, cursorY}, coord{cursorX, cursorY}, ev.Modifiers())
+					}
 				}
 			case tcell.KeyF4: // for inside the debugger
 				boardMutex.Lock()
