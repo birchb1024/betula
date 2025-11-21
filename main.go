@@ -1062,7 +1062,6 @@ const (
 
 type editor struct {
 	ks                 int
-	pivot              coord
 	selectionRectangle rectangle
 	cutPasteBuffer     board
 }
@@ -1091,9 +1090,9 @@ func (r *rectangle) inside(p coord) bool {
 	return p.x >= r.topLeft.x && p.x <= r.bottomRight.x && p.y >= r.topLeft.y && p.y <= r.bottomRight.y
 }
 
-func (e *editor) update(p coord) {
-	tl := coord{minInt(p.x, e.pivot.x), minInt(p.y, e.pivot.y)}
-	br := coord{maxInt(p.x, e.pivot.x), maxInt(p.y, e.pivot.y)}
+func (e *editor) updateSelection(cursor coord) {
+	tl := coord{minInt(cursor.x, e.selectionRectangle.topLeft.x), minInt(cursor.y, e.selectionRectangle.topLeft.y)}
+	br := coord{maxInt(cursor.x, e.selectionRectangle.bottomRight.x), maxInt(cursor.y, e.selectionRectangle.bottomRight.y)}
 	e.selectionRectangle.topLeft = tl
 	e.selectionRectangle.bottomRight = br
 }
@@ -1102,17 +1101,14 @@ func (e *editor) normalMode() {
 	theEditor.ks = KeysNormal
 }
 
-func (e *editor) selectMode() {
+func (e *editor) selectMode(cursor coord) {
 	theEditor.ks = KeysSelecting
+	e.selectionRectangle = newRectangle(cursor.x, cursor.y, cursor.x, cursor.y)
 }
 
 func (e *editor) move(cursor coord, cursorAfter coord, modifiers tcell.ModMask) {
-	if e.ks == KeysNormal {
-		e.pivot = cursor
-		e.selectionRectangle = newRectangle(cursor.x, cursor.y, cursorAfter.x, cursorAfter.y)
-	} else {
-		// already in selection mode
-		e.update(cursorAfter)
+	if e.ks == KeysSelecting {
+		e.updateSelection(cursorAfter)
 	}
 }
 
@@ -1311,7 +1307,7 @@ func main() {
 					cursorY -= 1
 				}
 			case tcell.KeyF1: // Because mac does not recognise KeyInsert believe it or not https://www.reddit.com/r/mac/comments/960ny0/how_to_use_the_insert_key_on_an_external_keyboard/
-				theEditor.selectMode()
+				theEditor.selectMode(coord{cursorX, cursorY})
 			case tcell.KeyEscape:
 				theEditor.normalMode()
 			case tcell.KeyCtrlC:
