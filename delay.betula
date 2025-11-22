@@ -1,57 +1,57 @@
                                                                                                                                                                                               
                                                                                                                                                                                               
-               101010111111111010101011111111101010101111111110101010111111111010101011111111101010101111111110101010111111111010101011                                                       
-     22C-------D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-                                                       
+               222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222                                                       
+     22C-------DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD                                                       
+               111000111000110000111100001111000011100001111000011110001111000011110000111000011110000111100111000011110000111000011110                                                       
+                                                                                                                                                                                              
+               111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111                                                       
+     00CJ------DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD                                                       
+        n      nmlkjihgfedcba9876543210zyxwvutsrqponmlkjihgfedcba9876543210zyxwvutsrqponmlkjihgfedcba9876543210zyxwvutsrqponmlkjihgfedc                                                       
                                                                                                                                                                                               
                                                                                                                                                                                               
-               1a191817161514131211101z1y1x1w1v1u1t1s1r1q1p1o1n1m1l1k1j1i1h1g1f1e1d1c1b1a191817161514131211101z1y1x1w1v1u1t1s1r1q1p1o1n                                                       
-     00CJ------D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-                                                       
-        a                                                                                                                                                                                     
                                                                                                                                                                                               
+                                                            u  222222222222222222222222222222222   t                                                                                          
+                                                         5zCL--DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD---L                                                                                          
+                                                               uuuuuuuuuuuuuuttttttttttttttttttt                                                                                              
                                                                                                                                                                                               
-                                                                                                                                                                                              
-                                                            v  2v2v2v2v2v2u2u2u2u2u2u2u2u2u2u2u2u  u                                                                                          
-                                                         5zCL--D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D-D---L                                                                                          
-                                                                                                                                                                                              
-                                                                                                                                                                                              
-                                                                                                                                         00000001                                             
-                                                                                                                    25C----J-----@-------D-D-D-------@                                        
-                                                                         52    2                                           0     |                   |                                        
-                                                                  2gCJ---D-----L                                                 |                   |  01010101010101010101010101010101010101
-                                                                     2                                                           |                  1+--DJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDD
-                                                                                                                                 |                   |   1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1  
-                                                                                                                                 |                   |                                        
-                                                                                                                                 @---------J---------@                                        
-                       01 1                                              17    7                                                           0                                                  
+                                                                                                                                         000                                                  
+                                                                                                                    25C----J-----@-------DDD---------@                                        
+                                                                         0                                                 0     |       000        0H                                        
+                                                                  2gCJ---D-----J                                                 |                   |  11111111111111111111111111111111111111
+                                                                     d   d     d                                                 |                  1=J-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+                                                                                                                                 |                   |1 10001000100010001000100010001000100010
+                                                                                                                                 |                  0H                                        
+                                                                                                                                 @-------------------@                                        
+                       0  2                                              1     7                                                                                                              
                     @--D--L                                        7*----D-----L                                                                                                              
-                    |                                                                                                                                                                         
-                    |  11 1                                                                                                                                                                   
+                    |  2                                                 7                                                                                                                    
+                    |  1  2                                                                                                                                                                   
                     @--D--L                                                                                                                                                                   
-                    |                                            0        202020202028282828282828282828282828282828272727272727272727                                                        
-                    |  21 1                               59C----L--@-----DJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJ-@                                                      
-                    @--D--L                                                0 0 0 0 0 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 7 7 7 7 7 7 7 7 7 |                                                      
-                    |                                               @------------------------------------------------------------------@                                                      
-              1     |  41 1                                         |                                                                                                                         
-           33CL-----@--D--L                                         |     272727272727272626262626262626262626262626262625252525252525                                                        
-                    |                                               @-----DJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJ-@                                                      
-                    |  81 1                                                7 7 7 7 7 7 7 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 5 5 5 5 5 5 5 |                                                      
+                    |  2                                         0        222222222222222222222222222222222222222222222222222222222222                                                        
+                    |  2  2                               59C----L--@-----DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD-@                                                      
+                    @--D--L                                               000000000000000000888888888888888888888887777777777777777777 |                                                      
+                    |  2                                            @------------------------------------------------------------------@                                                      
+              2     |  4  2                                         |                                                                                                                         
+           33CL-----@--D--L                                         |     222222222222222222222222222222222222222222222222222222222222                                                        
+                    |  2                                            @-----DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD-@                                                      
+                    |  8  2                                               777777766666666666666666666666666666666555555555555555555555 |                                                      
                     @--D--L                                         @------------------------------------------------------------------@                                                      
-                    |                                               |                                                                                                                         
-                    |  g0 0                                         |     252525252525252525242424242424242424242424242424242323232323                                                        
-                    @--D--L                                         @-----DJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJ-@                                                      
-                    |                                                      5 5 5 5 5 5 5 5 5 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 3 3 3 3 3 |                                                      
-                    |  z1 1                                         @------------------------------------------------------------------@                                                      
+                    |  2                                            |                                                                                                                         
+                    |  g  2                                         |     222222222222222222222222222222222222222222222222222222222222                                                        
+                    @--D--L                                         @-----DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD-@                                                      
+                    |  2                                                  555555444444444444444433333333333333332222222222222222111111 |                                                      
+                    |  z  2                                         @------------------------------------------------------------------@                                                      
                     @--D--L                                         |                                                                                                                         
-                                                                    |     232323232323232323232322222222222222222222222222222222212121                                                        
-                                                                    @-----DJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJ-@                                                      
-                                                                           3 3 3 3 3 3 3 3 3 3 3 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 1 1 1 |                                                      
+                       2                                            |     222222222222222222222222222222222222222222222222222222222222                                                        
+                                                                    @-----DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD-@                                                      
+                                                                          111111111111111111100000000000000000000000000000000888888888 |                                                      
                                                                     @------------------------------------------------------------------@                                                      
                                                                     |                                                                                                                         
-                                                                    |     212121212121212121212121212020202020202020202020202020202028                                                        
-                                                                    @-----DJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJ-@                                                      
-                                                                           1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 8 |                                                      
+                                                                    |     222222222222222222222222222222222222222222222222222222222222                                                        
+                                                                    @-----DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD-@                                                      
+                                                                          888888888888888888888887777777777777777777777777777777766666 |                                                      
                                                                     @------------------------------------------------------------------@                                                      
                                                                     |                                                                                                                         
-                                                                    |     282828282828282828282828282828272727272727272727272727272727                                                        
-                                                                    @-----DJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJDJ-@                                                      
-                                                                           8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 |                                                      
+                                                                    |     222222222222222222222222222222222222222222222222222222222222                                                        
+                                                                    @-----DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD-@                                                      
+                                                                          666666666666666666666666666555555555555555555555555555555554 |                                                      

@@ -77,7 +77,7 @@ func makeDelay(p coord, value rune, b board) *delay {
 	d.selfXY = p
 	d.inputXY = coord{p.x - 1, p.y}
 	d.outputXY = coord{p.x + 1, p.y}
-	d.oldValueXY = coord{p.x + 1, p.y - 1}
+	d.oldValueXY = coord{p.x, p.y + 1}
 	d.lagXY = coord{p.x, p.y - 1}
 	d.oldValue = value
 	d.nextValue = 0
@@ -234,7 +234,7 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 	cell := b.getC(p)
 	if ar, ok := aboutRunes[cell]; ok {
 		if ar.evaluate != nil {
-			ar.evaluate(visited, b, p, value, multi)
+			ar.evaluate(visited, b, p, f, value, multi)
 			return
 		}
 	}
@@ -465,19 +465,6 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		b.set(coord{p.x + 1, p.y}, value)
 		rightLamp.propagate(visited, b, p, value, multi)
 
-	case 'D':
-		// delay
-		//      ...
-		//		.D.
-		//
-		del, ok := allDelays[p]
-		if !ok {
-			// need a new backing object
-			del = makeDelay(p, value, b)
-			allDelays[p] = del
-		}
-		del.propagate(visited, b, f, value, multi)
-
 	case '=':
 		//       ..
 		//       .=.
@@ -502,8 +489,22 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 	default:
 	}
 }
+func evalDelay(visited visitors, b board, p coord, f coord, value rune, multi map[coord]int) bool {
+	// delay
+	//
+	//	     ...
+	//			.D.
+	del, ok := allDelays[p]
+	if !ok {
+		// need a new backing object
+		del = makeDelay(p, value, b)
+		allDelays[p] = del
+	}
+	del.propagate(visited, b, f, value, multi)
+	return true
+}
 
-func evalUnderLamp(visited visitors, b board, p coord, value rune, multi map[coord]int) bool {
+func evalUnderLamp(visited visitors, b board, p coord, f coord, value rune, multi map[coord]int) bool {
 	// Lamp underneath wire
 	//
 	//		.J.
@@ -515,7 +516,7 @@ func evalUnderLamp(visited visitors, b board, p coord, value rune, multi map[coo
 	return true
 }
 
-func evalTopLamp(visited visitors, b board, p coord, value rune, multi map[coord]int) bool {
+func evalTopLamp(visited visitors, b board, p coord, f coord, value rune, multi map[coord]int) bool {
 	// Lamp on top of wire
 	//
 	//	         .
@@ -526,7 +527,7 @@ func evalTopLamp(visited visitors, b board, p coord, value rune, multi map[coord
 	return true
 }
 
-func evalClock(visited visitors, b board, p coord, _ rune, multi map[coord]int) bool {
+func evalClock(visited visitors, b board, p coord, _ coord, _ rune, multi map[coord]int) bool {
 	//	.
 	//
 	// fmC.
@@ -961,11 +962,11 @@ func (b board) off(x int, y int) bool {
 }
 
 type allAboutRune struct {
-	evaluate      func(visited visitors, b board, p coord, value rune, multi map[coord]int) bool
+	evaluate      func(visited visitors, b board, p coord, f coord, value rune, multi map[coord]int) bool
 	valuesOverlay []coord // values - for clean deletion
 }
 
-var logicOverlay = []coord{{-1, 1},{-1, 0}, {-1, -1}}
+var logicOverlay = []coord{{-1, 1}, {-1, 0}, {-1, -1}}
 
 var aboutRunes = map[rune]*allAboutRune{
 	'#': {valuesOverlay: logicOverlay},
@@ -974,7 +975,7 @@ var aboutRunes = map[rune]*allAboutRune{
 	'.': {valuesOverlay: logicOverlay},
 	'=': {valuesOverlay: logicOverlay},
 	'C': {valuesOverlay: []coord{{-1, 0}, {-2, 0}}},
-	'D': {valuesOverlay: []coord{{0, -1}, {1, -1}}},
+	'D': {valuesOverlay: []coord{{0, 1}, {0, -1}}},
 	'J': {valuesOverlay: []coord{{0, 1}}},
 	'L': {valuesOverlay: []coord{{0, -1}}},
 	'H': {valuesOverlay: []coord{{-1, 0}}},
@@ -984,12 +985,13 @@ var aboutRunes = map[rune]*allAboutRune{
 	'^': {valuesOverlay: logicOverlay},
 	'S': {valuesOverlay: []coord{{-1, 1}, {0, 1}, {1, 1}, {1, -1}}},
 	'Z': {valuesOverlay: []coord{{-1, -1}, {0, -1}, {1, -1}, {1, 1}}},
- 	// 'M' Macros TODO - maybe
-	}
+	// 'M' Macros TODO - maybe
+}
 
 func init() {
 	// make these declarations dynamic to avoid init loop
 	aboutRunes['C'].evaluate = evalClock
+	aboutRunes['D'].evaluate = evalDelay
 	aboutRunes['L'].evaluate = evalTopLamp
 	aboutRunes['J'].evaluate = evalUnderLamp
 }
