@@ -1,16 +1,15 @@
 package main
 
 import (
+	"bufio"
+	"flag"
+	"fmt"
+	"io"
+	"math/rand"
+	"sync"
+	"time"
 
-"bufio"
-"flag"
-"fmt"
-"io"
-"math/rand"
-"sync"
-"time"
-
-"github.com/gdamore/tcell/v2"
+	"github.com/gdamore/tcell/v2"
 
 	"log"
 	"os"
@@ -65,7 +64,7 @@ type delay struct {
 	oldValue   rune
 	oldValueXY coord
 	outputXY   coord
-	nextValue   rune
+	nextValue  rune
 	selfXY     coord
 	lag        int
 }
@@ -124,14 +123,14 @@ func (d *delay) propagate(visited visitors, b board, f coord, value rune, multi 
 
 type relay struct {
 	vSwitchState coord
-	vControl coord
-	vLeft coord
-	vRight coord
-	inControl coord
-	inLeft coord
-	inRight coord
+	vControl     coord
+	vLeft        coord
+	vRight       coord
+	inControl    coord
+	inLeft       coord
+	inRight      coord
 	defaultState rune
-	switchONfn func(rune) bool
+	switchONfn   func(rune) bool
 }
 
 func (r *relay) propagate(visited visitors, b board, f coord, p coord, value rune, multi map[coord]int) {
@@ -143,7 +142,7 @@ func (r *relay) propagate(visited visitors, b board, f coord, p coord, value run
 		return
 	}
 	// if not seen before
-	if _, ok:= multi[p] ; !ok {
+	if _, ok := multi[p]; !ok {
 		multi[p] = 1
 		// reset variables
 		for _, v := range []coord{r.vLeft, r.vRight, r.vControl} {
@@ -170,14 +169,14 @@ func (r *relay) propagate(visited visitors, b board, f coord, p coord, value run
 		b.setC(r.vRight, value)
 	}
 
-	if _, ok:= multi[p] ; ok {
+	if _, ok := multi[p]; ok {
 		if b.getC(r.vControl) == ' ' && multi[p] > 5 {
 			b.setC(r.vSwitchState, r.defaultState)
 			b.setC(r.vControl, r.defaultState)
 		}
 	}
 	// if not enough inputs wait for next pass
-	if !(b.getC(r.vControl) != ' ' && (b.getC(r.vLeft) != ' ' || b.getC(r.vRight) != ' ') ) {
+	if !(b.getC(r.vControl) != ' ' && (b.getC(r.vLeft) != ' ' || b.getC(r.vRight) != ' ')) {
 		multi[p] += 1
 		return
 	}
@@ -190,7 +189,7 @@ func (r *relay) propagate(visited visitors, b board, f coord, p coord, value run
 		// left
 		visited.done(p)
 		propagate(visited, b, p, coord{p.x + 1, p.y}, b.getC(r.vLeft), multi)
-	} else if b.getC(r.vRight) != ' '  {
+	} else if b.getC(r.vRight) != ' ' {
 		// from right
 		visited.done(p)
 		propagate(visited, b, p, coord{p.x - 1, p.y}, b.getC(r.vRight), multi)
@@ -226,14 +225,19 @@ func (d *diode) propagate(visited visitors, b board, p coord, value rune, multi 
 }
 
 func propagate(visited visitors, b board, f coord, p coord, value rune, multi map[coord]int) {
-
 	if b.off(p.x, p.y) {
 		return
 	}
 	if len(visited) > 1 && nonValue(b[p.x][p.y]) {
 		return
 	}
-
+	cell := b.getC(p)
+	if ar, ok := aboutRunes[cell]; ok {
+		if ar.evaluate != nil {
+			ar.evaluate(visited, b, p, value, multi)
+			return
+		}
+	}
 	switch b.getC(p) {
 
 	case '*':
@@ -255,7 +259,7 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//              3R.
 		//               .
 		maxrand := 1
-		maxrxy := coord{p.x-1, p.y}
+		maxrxy := coord{p.x - 1, p.y}
 		maxrune := b.getC(maxrxy)
 		outputs := []coord{{p.x, p.y + 1}, {p.x + 1, p.y}, {p.x, p.y - 1}}
 		if visited.yes(p) {
@@ -273,51 +277,19 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 			propagate(visited, b, p, out, randi, multi)
 		}
 
-	case 'C':
-		//               .
-		//             fmC.
-		//               .
-		if visited.yes(p) {
-			return
-		}
-		outputs := []coord{{p.x, p.y + 1}, {p.x + 1, p.y}, {p.x, p.y - 1}}
-		moduloCo := coord{p.x-1, p.y}
-		moduloRune := b.getC(moduloCo)
-		fractionCo := coord{p.x-2, p.y}
-		fractionRune := b.getC(fractionCo)
-		modulo := 2
-		fraction := 4
-		div := 1 << fraction
-		if isDigit(moduloRune) {
-			modulo = rune2Int(moduloRune)
-			if modulo == 0 {
-				modulo = 36
-			}
-			if isDigit(fractionRune) {
-				fraction = rune2Int(fractionRune)
-				div = 1 << fraction
-			}
-		}
-		clock := (clockTicks / div) % modulo
-		clockRune := int2Rune(clock)
-		visited.done(p)
-		for _, out := range outputs {
-			propagate(visited, b, p, out, clockRune, multi)
-		}
-
 	case '-':
-		leftRight := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
+		leftRight := wire{[]coord{{p.x + 1, p.y}, {p.x - 1, p.y}}}
 		leftRight.propagate(visited, b, p, value, multi)
 
 	case '|':
 		//         .
 		//        .|.
 		//         .
-		left := coord{p.x-1, p.y}
-		right := coord{p.x+1, p.y}
-		up := coord{p.x, p.y-1}
-		down := coord{p.x, p.y+1}
-		if (f == left || f == right ) && b.getC(left) == '-' && b.getC(right) == '-' {
+		left := coord{p.x - 1, p.y}
+		right := coord{p.x + 1, p.y}
+		up := coord{p.x, p.y - 1}
+		down := coord{p.x, p.y + 1}
+		if (f == left || f == right) && b.getC(left) == '-' && b.getC(right) == '-' {
 			//
 			//    -|-        must be crossing wires to prevent stack overflow
 			//
@@ -446,15 +418,15 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//   ...
 		//
 		r := relay{}
-		r.vSwitchState = coord{p.x+1, p.y-1}
-		r.vControl = coord{p.x, p.y+1}
-		r.vLeft = coord{p.x-1, p.y+1}
-		r.vRight = coord{p.x+1, p.y+1}
-		r.inControl = coord{p.x, p.y-1}
-		r.inLeft = coord{p.x-1, p.y}
-		r.inRight = coord{p.x+1, p.y}
+		r.vSwitchState = coord{p.x + 1, p.y - 1}
+		r.vControl = coord{p.x, p.y + 1}
+		r.vLeft = coord{p.x - 1, p.y + 1}
+		r.vRight = coord{p.x + 1, p.y + 1}
+		r.inControl = coord{p.x, p.y - 1}
+		r.inLeft = coord{p.x - 1, p.y}
+		r.inRight = coord{p.x + 1, p.y}
 		r.defaultState = '0' // OFF Normally Open (NO)
-		r.switchONfn = func (r rune) bool { return !isZero(r) }
+		r.switchONfn = func(r rune) bool { return !isZero(r) }
 		r.propagate(visited, b, f, p, value, multi)
 
 	case 'Z':
@@ -464,13 +436,13 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//    .
 		//
 		r := relay{}
-		r.vSwitchState = coord{p.x+1, p.y+1}
-		r.vControl = coord{p.x, p.y-1}
-		r.vLeft = coord{p.x-1, p.y-1}
-		r.vRight = coord{p.x+1, p.y-1}
-		r.inControl = coord{p.x, p.y+1}
-		r.inLeft = coord{p.x-1, p.y}
-		r.inRight = coord{p.x+1, p.y}
+		r.vSwitchState = coord{p.x + 1, p.y + 1}
+		r.vControl = coord{p.x, p.y - 1}
+		r.vLeft = coord{p.x - 1, p.y - 1}
+		r.vRight = coord{p.x + 1, p.y - 1}
+		r.inControl = coord{p.x, p.y + 1}
+		r.inLeft = coord{p.x - 1, p.y}
+		r.inRight = coord{p.x + 1, p.y}
 		r.defaultState = '1' // ON Normally Closed (NC)
 		r.switchONfn = isZero
 		r.propagate(visited, b, f, p, value, multi)
@@ -480,8 +452,8 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//       .
 		//		.H
 		//       .
-		leftLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
-		b.set(coord{p.x-1, p.y}, value)
+		leftLamp := wire{[]coord{{p.x, p.y + 1}, {p.x, p.y - 1}}}
+		b.set(coord{p.x - 1, p.y}, value)
 		leftLamp.propagate(visited, b, p, value, multi)
 
 	case 'K':
@@ -489,28 +461,9 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		//       .
 		//		 K.
 		//       .
-		rightLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
-		b.set(coord{p.x+1, p.y}, value)
+		rightLamp := wire{[]coord{{p.x, p.y + 1}, {p.x, p.y - 1}}}
+		b.set(coord{p.x + 1, p.y}, value)
 		rightLamp.propagate(visited, b, p, value, multi)
-
-	case 'L':
-		// Lamp on top of wire
-		//       .
-		//		.L.
-		//
-		topLamp := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
-		b.set(coord{p.x, p.y-1}, value)
-		topLamp.propagate(visited, b, p, value, multi)
-
-	case 'J':
-		// Lamp underneath wire
-		//
-		//		.J.
-		//       '
-		//
-		bottomLamp := wire{[]coord{{p.x+1, p.y}, {p.x - 1, p.y}}}
-		b.set(coord{p.x, p.y+1}, value)
-		bottomLamp.propagate(visited, b, p, value, multi)
 
 	case 'D':
 		// delay
@@ -550,6 +503,64 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 	}
 }
 
+func evalUnderLamp(visited visitors, b board, p coord, value rune, multi map[coord]int) bool {
+	// Lamp underneath wire
+	//
+	//		.J.
+	//       '
+	//
+	underLamp := wire{[]coord{{p.x + 1, p.y}, {p.x - 1, p.y}}}
+	b.set(coord{p.x, p.y + 1}, value)
+	underLamp.propagate(visited, b, p, value, multi)
+	return true
+}
+
+func evalTopLamp(visited visitors, b board, p coord, value rune, multi map[coord]int) bool {
+	// Lamp on top of wire
+	//
+	//	         .
+	//			.L.
+	topLamp := wire{[]coord{{p.x + 1, p.y}, {p.x - 1, p.y}}}
+	b.set(coord{p.x, p.y - 1}, value)
+	topLamp.propagate(visited, b, p, value, multi)
+	return true
+}
+
+func evalClock(visited visitors, b board, p coord, _ rune, multi map[coord]int) bool {
+	//	.
+	//
+	// fmC.
+	//
+	//	.
+	if visited.yes(p) {
+		return true
+	}
+	outputs := []coord{{p.x, p.y + 1}, {p.x + 1, p.y}, {p.x, p.y - 1}}
+	moduloCo := coord{p.x - 1, p.y}
+	moduloRune := b.getC(moduloCo)
+	fractionCo := coord{p.x - 2, p.y}
+	fractionRune := b.getC(fractionCo)
+	modulo := 2
+	fraction := 4
+	div := 1 << fraction
+	if isDigit(moduloRune) {
+		modulo = rune2Int(moduloRune)
+		if modulo == 0 {
+			modulo = 36
+		}
+		if isDigit(fractionRune) {
+			fraction = rune2Int(fractionRune)
+			div = 1 << fraction
+		}
+	}
+	clock := (clockTicks / div) % modulo
+	clockRune := int2Rune(clock)
+	visited.done(p)
+	for _, out := range outputs {
+		propagate(visited, b, p, out, clockRune, multi)
+	}
+	return false
+}
 
 func int2Rune(i int) rune {
 	if i >= 0 && i <= 9 {
@@ -579,14 +590,14 @@ func rune2Int(r rune) int {
 }
 
 type gate struct {
-	inTop coord
-	inBottom coord
-	vTopXY coord
-	vBottomXY coord
-	vOut coord
-	output coord
+	inTop         coord
+	inBottom      coord
+	vTopXY        coord
+	vBottomXY     coord
+	vOut          coord
+	output        coord
 	runeCondition func(rune, rune) bool
-	condition func(bool, bool) bool
+	condition     func(bool, bool) bool
 }
 
 func runeGate(visited visitors, b board, f coord, p coord, value rune, conditionFn func(rune, rune) bool, multi map[coord]int) {
@@ -634,7 +645,7 @@ func (g *gate) propagate(visited visitors, b board, f coord, p coord, value rune
 		return
 	}
 	// if not seen before
-	if _, ok:= multi[p] ; !ok {
+	if _, ok := multi[p]; !ok {
 		multi[p] = 1
 		// reset variables
 		for _, v := range []coord{g.vTopXY, g.vBottomXY, g.vOut} {
@@ -700,7 +711,7 @@ func expandMacro(pb board, home coord, name string) {
 			if nonValue(mb[x][y]) {
 				continue
 			}
-			pb.set(coord{home.x+x, home.y+y}, mb[x][y])
+			pb.set(coord{home.x + x, home.y + y}, mb[x][y])
 		}
 	}
 
@@ -743,9 +754,9 @@ func interpreter(b board) {
 				case '_':
 					x = b.findCommentEnd(x+1, y) + 1
 				case 'L':
-					b.set(coord{x, y-1}, ' ')
+					b.set(coord{x, y - 1}, ' ')
 				case 'J':
-					b.set(coord{x, y+1}, ' ')
+					b.set(coord{x, y + 1}, ' ')
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
@@ -760,7 +771,7 @@ func interpreter(b board) {
 		}
 		multiPass := make(visitors)
 
-		for pass := 1;  ; pass++ {
+		for pass := 1; ; pass++ {
 			for _, p := range roots {
 				visited := make(visitors)
 				propagate(visited, b, nowhere, p, ' ', multiPass)
@@ -949,11 +960,38 @@ func (b board) off(x int, y int) bool {
 	return false
 }
 
-// Where are the active cells values - for clean deletion
-var valuesOverlay = map[rune][]coord{
-	'C': {coord{-1, 0}, coord{-2, 0}},
-	'L': {coord{0, -1}},
-	'J': {coord{0, 1}},
+type allAboutRune struct {
+	evaluate      func(visited visitors, b board, p coord, value rune, multi map[coord]int) bool
+	valuesOverlay []coord // values - for clean deletion
+}
+
+var logicOverlay = []coord{{-1, 1},{-1, 0}, {-1, -1}}
+
+var aboutRunes = map[rune]*allAboutRune{
+	'#': {valuesOverlay: logicOverlay},
+	'*': {valuesOverlay: []coord{{-1, 0}, {-2, 0}}},
+	'+': {valuesOverlay: logicOverlay},
+	'.': {valuesOverlay: logicOverlay},
+	'=': {valuesOverlay: logicOverlay},
+	'C': {valuesOverlay: []coord{{-1, 0}, {-2, 0}}},
+	'D': {valuesOverlay: []coord{{0, -1}, {1, -1}}},
+	'J': {valuesOverlay: []coord{{0, 1}}},
+	'L': {valuesOverlay: []coord{{0, -1}}},
+	'H': {valuesOverlay: []coord{{-1, 0}}},
+	'K': {valuesOverlay: []coord{{1, 0}}},
+	'P': {valuesOverlay: []coord{{0, -1}}},
+	'R': {valuesOverlay: []coord{{-1, 0}}},
+	'^': {valuesOverlay: logicOverlay},
+	'S': {valuesOverlay: []coord{{-1, 1}, {0, 1}, {1, 1}, {1, -1}}},
+	'Z': {valuesOverlay: []coord{{-1, -1}, {0, -1}, {1, -1}, {1, 1}}},
+ 	// 'M' Macros TODO - maybe
+	}
+
+func init() {
+	// make these declarations dynamic to avoid init loop
+	aboutRunes['C'].evaluate = evalClock
+	aboutRunes['L'].evaluate = evalTopLamp
+	aboutRunes['J'].evaluate = evalUnderLamp
 }
 
 // set() - Set a value but don't throw an error if outside the board
@@ -966,9 +1004,9 @@ func (b board) setAndClearValues(p coord, r rune) {
 	v := b[p.x][p.y]
 	b.setC(p, r)
 	// If it's an active cell, remove its surrounding input/output values
-	if valueLocations, ok := valuesOverlay[v]; ok {
-		for _, loc := range valueLocations {
-			b.setC(coord{p.x+loc.x, p.y+loc.y},  ' ')
+	if runeInfo, ok := aboutRunes[v]; ok {
+		for _, loc := range runeInfo.valuesOverlay {
+			b.setC(coord{p.x + loc.x, p.y + loc.y}, ' ')
 		}
 	}
 }
@@ -983,7 +1021,7 @@ func (b board) setC(p coord, r rune) {
 
 func (v visitors) gt(p coord, max int) bool {
 	val, ok := v[p]
-	if !ok{
+	if !ok {
 		return false
 	}
 	if val > max {
@@ -998,12 +1036,11 @@ func (v visitors) yes(p coord) bool {
 
 func (v visitors) done(p coord) {
 	val, ok := v[p]
-	if !ok{
+	if !ok {
 		v[p] = 1
 	}
 	v[p] = val + 1
 }
-
 
 func (b board) getC(p coord) rune {
 	if b.off(p.x, p.y) {
@@ -1131,7 +1168,7 @@ func (e *editor) copy(b board) {
 		e.cutPasteBuffer = makeBoard(e.selectionRectangle.bottomRight.x-e.selectionRectangle.topLeft.x+1, e.selectionRectangle.bottomRight.y-e.selectionRectangle.topLeft.y+1)
 		for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
 			for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
-				e.cutPasteBuffer.set(coord{x-e.selectionRectangle.topLeft.x, y-e.selectionRectangle.topLeft.y}, b.get(x, y))
+				e.cutPasteBuffer.set(coord{x - e.selectionRectangle.topLeft.x, y - e.selectionRectangle.topLeft.y}, b.get(x, y))
 			}
 		}
 		e.ks = KeysNormal
@@ -1143,7 +1180,7 @@ func (e *editor) copy(b board) {
 func (e *editor) paste(b board, cursor coord) {
 	for x := 0; x < len(e.cutPasteBuffer); x++ {
 		for y := 0; y < len(e.cutPasteBuffer[x]); y++ {
-			b.set(coord{cursor.x+x, cursor.y+y}, e.cutPasteBuffer.get(x, y))
+			b.set(coord{cursor.x + x, cursor.y + y}, e.cutPasteBuffer.get(x, y))
 		}
 	}
 }
@@ -1183,14 +1220,16 @@ func (e *editor) style(p coord, cellStyle tcell.Style) tcell.Style {
 
 func (e *editor) mode() string {
 	switch e.ks {
-		case KeysNormal:  return "ED "
-		case KeysSelecting: return "SEL"
+	case KeysNormal:
+		return "ED "
+	case KeysSelecting:
+		return "SEL"
 	}
 	return "???"
 }
 
-var renderTime = flag.Duration("renderTime", 100 * time.Millisecond, "How frequently to refresh the screen.")
-var clockSpeed = flag.Duration("clockSpeed", 50 * time.Millisecond, "How frequently to run the interpreter.")
+var renderTime = flag.Duration("renderTime", 100*time.Millisecond, "How frequently to refresh the screen.")
+var clockSpeed = flag.Duration("clockSpeed", 50*time.Millisecond, "How frequently to run the interpreter.")
 var renderStyle = flag.String("renderStyle", "unicode", "Render style [plain, unicode], default unicode.")
 
 // var prof interface{ Stop() } // Keep this line
@@ -1217,7 +1256,7 @@ func main() {
 	setLeftMsg = func(msg string) {
 		runes := []rune(msg)
 		for i, r := range runes {
-			theBoard.set(coord{i, height-1}, r)
+			theBoard.set(coord{i, height - 1}, r)
 		}
 	}
 
@@ -1351,10 +1390,10 @@ func main() {
 						cursorY -= 1
 						theEditor.move(coord{cursorX, cursorY})
 					} else {
-						for y := cursorY-1; y >= 0; y -= 1 {
+						for y := cursorY - 1; y >= 0; y -= 1 {
 							c := theBoard[cursorX][y]
 							if !nonValue(c) {
-								cursorY = y+1
+								cursorY = y + 1
 								break
 							}
 							if y == 0 {
@@ -1376,10 +1415,10 @@ func main() {
 						cursorY += 1
 						theEditor.move(coord{cursorX, cursorY})
 					} else {
-						for y := cursorY+1; y <= height-2; y += 1 {
+						for y := cursorY + 1; y <= height-2; y += 1 {
 							c := theBoard[cursorX][y]
 							if !nonValue(c) {
-								cursorY = y-1
+								cursorY = y - 1
 								break
 							}
 							if y == height-2 {
@@ -1401,10 +1440,10 @@ func main() {
 						cursorX -= 1
 						theEditor.move(coord{cursorX, cursorY})
 					} else {
-						for x := cursorX-1; x >= 0; x -= 1 {
+						for x := cursorX - 1; x >= 0; x -= 1 {
 							c := theBoard[x][cursorY]
 							if !nonValue(c) {
-								cursorX = x+1
+								cursorX = x + 1
 								break
 							}
 							if x == 0 {
@@ -1426,14 +1465,14 @@ func main() {
 						cursorX += 1
 						theEditor.move(coord{cursorX, cursorY})
 					} else {
-						for x := cursorX+1; x <= width-1 ; x += 1 {
+						for x := cursorX + 1; x <= width-1; x += 1 {
 							c := theBoard[x][cursorY]
 							if !nonValue(c) {
-								cursorX = x-1
+								cursorX = x - 1
 								break
 							}
 							if x == width-1 {
-								cursorX = width-1
+								cursorX = width - 1
 								break
 							}
 						}
@@ -1456,6 +1495,10 @@ func main() {
 				// follow wires, user-friendly cursor positions
 				switch k {
 				case '*':
+					cursorX -= 1
+				case 'C':
+					cursorX -= 1
+				case 'R':
 					cursorX -= 1
 				case '|':
 					if nonValue(theBoard[cursorX][cursorY+1]) {
@@ -1490,9 +1533,10 @@ func fancy(r rune) rune {
 	}
 	return f
 }
+
 var boxDrawRunes = map[rune]rune{
-	'|' : '│',
-	'-' : '─',
+	'|': '│',
+	'-': '─',
 	// lookups here: https://unicode-table.com/en/blocks/box-drawing/
 }
 
@@ -1592,7 +1636,6 @@ func styleOf(r rune) tcell.Style {
 	}
 	runeStyleCache[r] = s
 	return s
-
 
 }
 
