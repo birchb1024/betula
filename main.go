@@ -2,11 +2,15 @@ package main
 
 import (
 	"bufio"
-	"flag"
+	"bytes"
+"flag"
 	"fmt"
 	"io"
 	"math/rand"
-	"sync"
+	"os/exec"
+"strconv"
+"strings"
+"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -528,11 +532,11 @@ func evalTopLamp(visited visitors, b board, p coord, f coord, value rune, multi 
 }
 
 func evalClock(visited visitors, b board, p coord, _ coord, _ rune, multi map[coord]int) bool {
-	//	.
 	//
+	//   .
 	// fmC.
+	//   .
 	//
-	//	.
 	if visited.yes(p) {
 		return true
 	}
@@ -559,6 +563,83 @@ func evalClock(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 	visited.done(p)
 	for _, out := range outputs {
 		propagate(visited, b, p, out, clockRune, multi)
+	}
+	return false
+}
+
+func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[coord]int) bool {
+	//
+	//               v
+	// "some script"3$.
+	//
+	//
+	if visited.yes(p) {
+		return true
+	}
+	outputs := []coord{{p.x+1, p.y}}
+
+	fraction := 4
+	div := 1 << fraction
+
+	fractionRune := b.getC(coord{p.x - 1, p.y})
+	if isDigit(fractionRune) {
+		fraction = rune2Int(fractionRune)
+		div = 1 << fraction
+	}
+	visited.done(p)
+	if clockTicks % div != 0 {
+		for _, out := range outputs {
+			propagate(visited, b, p, out, b.getC(coord{p.x, p.y-1}), multi)
+		}
+		return true
+	}
+	// Scan the board for the command script
+	var cmd = make([]rune, 0)
+	// last char must be quote
+	if b.get(p.x-2, p.y) != '"' {
+		return true
+	}
+	var scriptLine string
+	// Scan backwards until we find the quote at the start of the command
+	for x := 0; x < width; x +=1 {
+		r := b.get(p.x-3-x, p.y)
+		if r == '"' {
+			scriptLine = string(cmd)
+			break
+		}
+		cmd = append([]rune{r}, cmd...)
+	}
+	// Now it is time run an external shell command
+	cmdLine := exec.Command("/bin/bash", "-c", scriptLine )
+	var stdout, stderr bytes.Buffer
+	cmdLine.Stdout = &stdout
+	cmdLine.Stderr = &stderr
+
+	err := cmdLine.Run() // TODO this is a blocking call - make it non-blocking
+
+	if err != nil {
+		// Check if the error is an ExitError (which indicates a non-zero exit status).
+		if exitError, ok := err.(*exec.ExitError); ok {
+			// Extract the exit code from the ExitError.
+			setMiddleMsg("error " + strconv.Itoa(exitError.ExitCode()) + " " + stderr.String())
+		} else {
+			setMiddleMsg(err.Error())
+		}
+		return true
+	}
+
+	cmdOut, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
+	if err != nil {
+		setMiddleMsg(err.Error() + " " + stdout.String())
+	}
+	if int2Rune(cmdOut) == ' ' {
+		setMiddleMsg("ERROR: " + scriptLine + ": " + stdout.String() + "is not a valid number.")
+		return true
+	}
+	outputValue := int2Rune(cmdOut)
+	b.set(coord{p.x, p.y-1}, outputValue)
+	for _, out := range outputs {
+		propagate(visited, b, p, out, outputValue, multi)
 	}
 	return false
 }
@@ -718,7 +799,8 @@ func expandMacro(pb board, home coord, name string) {
 
 }
 func interpreter(b board) {
-	// for IDE time.Sleep(10 * time.Second)
+	// for IDE
+	// time.Sleep(20 * time.Second)
 	for {
 		clockTicks += 1
 		boardMutex.Lock()
@@ -761,6 +843,8 @@ func interpreter(b board) {
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
+					roots = append(roots, coord{x, y})
+				case '$':
 					roots = append(roots, coord{x, y})
 				case 'R':
 					roots = append(roots, coord{x, y})
@@ -982,14 +1066,16 @@ var aboutRunes = map[rune]*allAboutRune{
 	'K': {valuesOverlay: []coord{{1, 0}}},
 	'P': {valuesOverlay: []coord{{0, -1}}},
 	'R': {valuesOverlay: []coord{{-1, 0}}},
+	'$': {valuesOverlay: []coord{{-1, 0}}},
 	'^': {valuesOverlay: logicOverlay},
-	'S': {valuesOverlay: []coord{{-1, 1}, {0, 1}, {1, 1}, {1, -1}}},
+	'S': {valuesOverlay: []coord{{-1, 0}}}, // TODO - make a function for this
 	'Z': {valuesOverlay: []coord{{-1, -1}, {0, -1}, {1, -1}, {1, 1}}},
 	// 'M' Macros TODO - maybe
 }
 
 func init() {
 	// make these declarations dynamic to avoid init loop
+	aboutRunes['$'].evaluate = evalShell
 	aboutRunes['C'].evaluate = evalClock
 	aboutRunes['D'].evaluate = evalDelay
 	aboutRunes['L'].evaluate = evalTopLamp
@@ -1556,6 +1642,7 @@ var colors = map[rune]tcell.Color{
 	'@':  tcell.ColorLightBlue,
 
 	'?': tcell.ColorRed,
+	'$': tcell.ColorRed,
 
 	'E': tcell.ColorBlack,
 	'B': tcell.ColorBlack,
@@ -1604,6 +1691,7 @@ var backgrounds = map[rune]tcell.Color{
 
 	'C': tcell.ColorLightGreen,
 	'*': tcell.ColorLightGreen,
+	'?': tcell.ColorLightGreen,
 	'R': tcell.ColorLightGreen,
 	'D': tcell.ColorLightGreen,
 }
