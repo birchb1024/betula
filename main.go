@@ -3,20 +3,20 @@ package main
 import (
 	"bufio"
 	"bytes"
-"flag"
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
+	"os"
 	"os/exec"
-"strconv"
-"strings"
-"sync"
+	"slices"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
 
-	"log"
-	"os"
 )
 
 type board [][]rune
@@ -558,7 +558,7 @@ func evalVerticalMidLamp(visited visitors, b board, p coord, _ coord, value rune
 	//			 X      - when it's on
 	//			 .
 	//
-	midLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
+	midLamp := wire{[]coord{{p.x, p.y + 1}, {p.x, p.y - 1}}}
 	display := 'Q'
 	if rune2Int(value) > 0 {
 		display = 'X'
@@ -606,14 +606,11 @@ func evalClock(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 
 func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[coord]int) bool {
 	//
-	//               v
-	// "some script"3$.
+	//
+	// "some script"3$xxxxxxxxxxxxxxxxxxxxxxxxxxx
 	//
 	//
-	if visited.yes(p) {
-		return true
-	}
-	outputs := []coord{{p.x+1, p.y}}
+	if visited.yes(p) {return true }
 
 	fraction := 4
 	div := 1 << fraction
@@ -624,10 +621,10 @@ func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 		div = 1 << fraction
 	}
 	visited.done(p)
-	if clockTicks % div != 0 {
-		for _, out := range outputs {
-			propagate(visited, b, p, out, b.getC(coord{p.x, p.y-1}), multi)
-		}
+	if clockTicks%div != 0 {
+		//		for _, out := range outputs {
+		//			propagate(visited, b, p, out, b.getC(coord{p.x, p.y-1}), multi)
+		//		}
 		return true
 	}
 	// Scan the board for the command script
@@ -638,7 +635,7 @@ func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 	}
 	var scriptLine string
 	// Scan backwards until we find the quote at the start of the command
-	for x := 0; x < width; x +=1 {
+	for x := 0; x < width; x += 1 {
 		r := b.get(p.x-3-x, p.y)
 		if r == '"' {
 			scriptLine = string(cmd)
@@ -647,7 +644,7 @@ func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 		cmd = append([]rune{r}, cmd...)
 	}
 	// Now it is time run an external shell command
-	cmdLine := exec.Command("/bin/bash", "-c", scriptLine )
+	cmdLine := exec.Command("/bin/bash", "-c", scriptLine)
 	var stdout, stderr bytes.Buffer
 	cmdLine.Stdout = &stdout
 	cmdLine.Stderr = &stderr
@@ -664,20 +661,28 @@ func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 		}
 		return true
 	}
+	// Put the results on the board
+	output := stdout.Bytes()
+	last := p.x + 1 + len(output)
+	for i := 0; i < len(output) && p.x+i < width-1; i++ {
+		if slices.Contains([]byte{'\r', '\n', '\f', '\t'}, output[i]) {
+			last = p.x + 1 + i
+			break
+		}
+		b.setC(coord{p.x + 1 + i, p.y}, int2Rune(rune2Int(rune(output[i]))))
+	}
+	b.setC(coord{last, p.y}, ';')
 
-	cmdOut, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
-	if err != nil {
-		setMiddleMsg(err.Error() + " " + stdout.String())
+	// Now propagate the outputs
+	for x := p.x+1 ; x < width -1; x += 1 {
+		val := b.get(x, p.y)
+		if val == ';' {
+			break
+		}
+		propagate(visited, b, p, coord{x, p.y-1}, val, multi)
+		propagate(visited, b, p, coord{x, p.y+1}, val, multi)
 	}
-	if int2Rune(cmdOut) == ' ' {
-		setMiddleMsg("ERROR: " + scriptLine + ": " + stdout.String() + "is not a valid number.")
-		return true
-	}
-	outputValue := int2Rune(cmdOut)
-	b.set(coord{p.x, p.y-1}, outputValue)
-	for _, out := range outputs {
-		propagate(visited, b, p, out, outputValue, multi)
-	}
+
 	return false
 }
 
@@ -872,13 +877,21 @@ func interpreter(b board) {
 			for x := 0; x < width; x++ {
 				switch b.get(x, y) {
 				case '_':
-					x = b.findCommentEnd(x+1, y) + 1
-				case 'H': b.set(coord{x-1, y}, ' ')
-				case 'I': b.set(coord{x, y}, 'O')
-				case 'X': b.set(coord{x, y}, 'Q')
-				case 'J': b.set(coord{x, y + 1}, ' ')
-				case 'K': b.set(coord{x + 1, y}, ' ')
-				case 'L': b.set(coord{x, y - 1}, ' ')
+					x = b.findCommentEnd('_', x+1, y) + 1
+				case '"':
+					x = b.findCommentEnd('"', x+1, y) + 1
+				case 'H':
+					b.set(coord{x - 1, y}, ' ')
+				case 'I':
+					b.set(coord{x, y}, 'O')
+				case 'X':
+					b.set(coord{x, y}, 'Q')
+				case 'J':
+					b.set(coord{x, y + 1}, ' ')
+				case 'K':
+					b.set(coord{x + 1, y}, ' ')
+				case 'L':
+					b.set(coord{x, y - 1}, ' ')
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
@@ -1188,9 +1201,9 @@ func (b board) get(x, y int) rune {
 	return b.getC(coord{x, y})
 }
 
-func (b board) findCommentEnd(x int, y int) int {
+func (b board) findCommentEnd(ch rune, x int, y int) int {
 	for ; x < len(b); x++ {
-		if b.get(x, y) == '_' {
+		if b.get(x, y) == ch {
 			break
 		}
 	}
@@ -1370,6 +1383,7 @@ var renderStyle = flag.String("renderStyle", "unicode", "Render style [plain, un
 // var prof interface{ Stop() } // Keep this line
 
 func main() {
+	time.Sleep(10 * time.Second)
 	//// CPUProfile enables cpu profiling. 									// Keep this lines
 	//prof = profile.Start(profile.CPUProfile, profile.ProfilePath(".")) 	// Keep this line
 
@@ -1689,7 +1703,8 @@ var colors = map[rune]tcell.Color{
 	'@':  tcell.ColorLightBlue,
 
 	'?': tcell.ColorRed,
-	'$': tcell.ColorRed,
+	'$': tcell.ColorDarkBlue,
+	';': tcell.ColorDarkBlue,
 
 	'E': tcell.ColorBlack,
 	'B': tcell.ColorBlack,
@@ -1745,6 +1760,8 @@ var backgrounds = map[rune]tcell.Color{
 
 	'M': tcell.ColorLightGoldenrodYellow,
 
+	'$': tcell.ColorLightGreen,
+	';': tcell.ColorLightGreen,
 	'C': tcell.ColorLightGreen,
 	'*': tcell.ColorLightGreen,
 	'?': tcell.ColorLightGreen,
