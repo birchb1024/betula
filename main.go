@@ -508,7 +508,7 @@ func evalDelay(visited visitors, b board, p coord, f coord, value rune, multi ma
 	return true
 }
 
-func evalUnderLamp(visited visitors, b board, p coord, f coord, value rune, multi map[coord]int) bool {
+func evalUnderLamp(visited visitors, b board, p coord, _ coord, value rune, multi map[coord]int) bool {
 	// Lamp underneath wire
 	//
 	//		.J.
@@ -520,7 +520,7 @@ func evalUnderLamp(visited visitors, b board, p coord, f coord, value rune, mult
 	return true
 }
 
-func evalTopLamp(visited visitors, b board, p coord, f coord, value rune, multi map[coord]int) bool {
+func evalTopLamp(visited visitors, b board, p coord, _ coord, value rune, multi map[coord]int) bool {
 	// Lamp on top of wire
 	//
 	//	         .
@@ -528,6 +528,43 @@ func evalTopLamp(visited visitors, b board, p coord, f coord, value rune, multi 
 	topLamp := wire{[]coord{{p.x + 1, p.y}, {p.x - 1, p.y}}}
 	b.set(coord{p.x, p.y - 1}, value)
 	topLamp.propagate(visited, b, p, value, multi)
+	return true
+}
+
+func evalHorizontalMidLamp(visited visitors, b board, p coord, _ coord, value rune, multi map[coord]int) bool {
+	// Lamp in-line on the wire
+	//
+	//			.O.     - when it's off
+	//			.I.     - when it's on
+	//
+	midLamp := wire{[]coord{{p.x + 1, p.y}, {p.x - 1, p.y}}}
+	display := 'O'
+	if rune2Int(value) > 0 {
+		display = 'I'
+	}
+	b.setC(coord{p.x, p.y}, display)
+	midLamp.propagate(visited, b, p, value, multi)
+	return true
+}
+
+func evalVerticalMidLamp(visited visitors, b board, p coord, _ coord, value rune, multi map[coord]int) bool {
+	// Lamp in-line on the wire
+	//
+	//           .
+	//			 Q     - when it's off
+	//			 .
+	//
+	//			 .
+	//			 X      - when it's on
+	//			 .
+	//
+	midLamp := wire{[]coord{{p.x, p.y+1}, {p.x, p.y-1}}}
+	display := 'Q'
+	if rune2Int(value) > 0 {
+		display = 'X'
+	}
+	b.setC(coord{p.x, p.y}, display)
+	midLamp.propagate(visited, b, p, value, multi)
 	return true
 }
 
@@ -830,16 +867,18 @@ func interpreter(b board) {
 				}
 			}
 		}
-		// Find comments, roots and reset indicators
+		// Find comments, roots and reset lamps
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
 				switch b.get(x, y) {
 				case '_':
 					x = b.findCommentEnd(x+1, y) + 1
-				case 'L':
-					b.set(coord{x, y - 1}, ' ')
-				case 'J':
-					b.set(coord{x, y + 1}, ' ')
+				case 'H': b.set(coord{x-1, y}, ' ')
+				case 'I': b.set(coord{x, y}, 'O')
+				case 'X': b.set(coord{x, y}, 'Q')
+				case 'J': b.set(coord{x, y + 1}, ' ')
+				case 'K': b.set(coord{x + 1, y}, ' ')
+				case 'L': b.set(coord{x, y - 1}, ' ')
 				case '*':
 					roots = append(roots, coord{x, y})
 				case 'C':
@@ -1054,22 +1093,26 @@ var logicOverlay = []coord{{-1, 1}, {-1, 0}, {-1, -1}}
 
 var aboutRunes = map[rune]*allAboutRune{
 	'#': {valuesOverlay: logicOverlay},
+	'$': {valuesOverlay: []coord{{-1, 0}}},
 	'*': {valuesOverlay: []coord{{-1, 0}, {-2, 0}}},
 	'+': {valuesOverlay: logicOverlay},
 	'.': {valuesOverlay: logicOverlay},
 	'=': {valuesOverlay: logicOverlay},
 	'C': {valuesOverlay: []coord{{-1, 0}, {-2, 0}}},
 	'D': {valuesOverlay: []coord{{0, 1}, {0, -1}}},
-	'J': {valuesOverlay: []coord{{0, 1}}},
-	'L': {valuesOverlay: []coord{{0, -1}}},
 	'H': {valuesOverlay: []coord{{-1, 0}}},
+	'I': {valuesOverlay: []coord{}},
+	'J': {valuesOverlay: []coord{{0, 1}}},
 	'K': {valuesOverlay: []coord{{1, 0}}},
+	'L': {valuesOverlay: []coord{{0, -1}}},
+	'O': {valuesOverlay: []coord{}},
 	'P': {valuesOverlay: []coord{{0, -1}}},
+	'Q': {valuesOverlay: []coord{}},
 	'R': {valuesOverlay: []coord{{-1, 0}}},
-	'$': {valuesOverlay: []coord{{-1, 0}}},
-	'^': {valuesOverlay: logicOverlay},
 	'S': {valuesOverlay: []coord{{-1, 0}}}, // TODO - make a function for this
+	'X': {valuesOverlay: []coord{}},
 	'Z': {valuesOverlay: []coord{{-1, -1}, {0, -1}, {1, -1}, {1, 1}}},
+	'^': {valuesOverlay: logicOverlay},
 	// 'M' Macros TODO - maybe
 }
 
@@ -1078,8 +1121,12 @@ func init() {
 	aboutRunes['$'].evaluate = evalShell
 	aboutRunes['C'].evaluate = evalClock
 	aboutRunes['D'].evaluate = evalDelay
-	aboutRunes['L'].evaluate = evalTopLamp
 	aboutRunes['J'].evaluate = evalUnderLamp
+	aboutRunes['L'].evaluate = evalTopLamp
+	aboutRunes['O'].evaluate = evalHorizontalMidLamp
+	aboutRunes['I'].evaluate = evalHorizontalMidLamp
+	aboutRunes['Q'].evaluate = evalVerticalMidLamp
+	aboutRunes['X'].evaluate = evalVerticalMidLamp
 }
 
 // set() - Set a value but don't throw an error if outside the board
@@ -1650,6 +1697,8 @@ var colors = map[rune]tcell.Color{
 	'_': tcell.ColorLightSeaGreen,
 
 	'H': tcell.ColorBlack,
+	'X': tcell.ColorBlack,
+	'I': tcell.ColorBlack,
 	'J': tcell.ColorBlack,
 	'K': tcell.ColorBlack,
 	'L': tcell.ColorBlack,
@@ -1657,6 +1706,8 @@ var colors = map[rune]tcell.Color{
 	'*': tcell.ColorBlack,
 	'D': tcell.ColorBlack,
 	'R': tcell.ColorBlack,
+	'O': tcell.ColorBlack,
+	'Q': tcell.ColorBlack,
 	'C': tcell.ColorDarkBlue,
 	'S': tcell.ColorBlack,
 	'Z': tcell.ColorBlack,
@@ -1678,6 +1729,11 @@ var backgrounds = map[rune]tcell.Color{
 
 	'E': tcell.ColorRed,
 	'B': tcell.ColorRed,
+
+	'I': tcell.ColorRed,
+	'O': tcell.ColorDarkRed,
+	'X': tcell.ColorRed,
+	'Q': tcell.ColorDarkRed,
 
 	'H': tcell.ColorLightBlue,
 	'J': tcell.ColorLightBlue,

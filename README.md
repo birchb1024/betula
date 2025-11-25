@@ -1,6 +1,10 @@
 # betula
 A live-coding logic simulation with a text user interface
 
+```shell
+go build -gcflags="all=-N -l" && ./betula clock.betula ; stty sane ; tset
+```
+
 Screencast video here: https://asciinema.org/a/447367
 
 # Cell Value types
