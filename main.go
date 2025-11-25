@@ -620,68 +620,56 @@ func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 		fraction = rune2Int(fractionRune)
 		div = 1 << fraction
 	}
+
+	if (clockTicks % div) == 0 {
+
+		// Scan the board for the command script
+		var cmd = make([]rune, 0)
+		// last char must be quote
+		if b.get(p.x-2, p.y) != '"' {
+			return true
+		}
+		var scriptLine string
+		// Scan backwards until we find the quote at the start of the command
+		for x := 0; x < width; x += 1 {
+			r := b.get(p.x-3-x, p.y)
+			if r == '"' {
+				scriptLine = string(cmd)
+				break
+			}
+			cmd = append([]rune{r}, cmd...)
+		}
+		// run an external shell command
+		cmdLine := exec.Command("/bin/bash", "-c", scriptLine)
+		var stdout, stderr bytes.Buffer
+		cmdLine.Stdout = &stdout
+		cmdLine.Stderr = &stderr
+
+		err := cmdLine.Run() // TODO this is a blocking call - make it non-blocking
+
+		if err != nil {
+			// Check if the error is an ExitError (which indicates a non-zero exit status).
+			if exitError, ok := err.(*exec.ExitError); ok {
+				// Extract the exit code from the ExitError.
+				setMiddleMsg("error " + strconv.Itoa(exitError.ExitCode()) + " " + stderr.String())
+			} else {
+				setMiddleMsg(err.Error())
+			}
+			return true
+		}
+		// Put the results on the board
+		output := stdout.Bytes()
+		lastY := p.y + 1 + len(output)
+		for i := 0; i < len(output) && p.y + i < height-2; i++ {
+			if slices.Contains([]byte{'\r', '\n', '\f', '\t'}, output[i]) {
+				lastY = p.y + 1 + i
+				break
+			}
+			b.setC(coord{p.x, p.y + 1 + i}, int2Rune(rune2Int(rune(output[i]))))
+		}
+		b.setC(coord{p.x, lastY}, ';')
+	}
 	visited.done(p)
-	if clockTicks%div != 0 {
-		//		for _, out := range outputs {
-		//			propagate(visited, b, p, out, b.getC(coord{p.x, p.y-1}), multi)
-		//		}
-		return true
-	}
-	// Scan the board for the command script
-	var cmd = make([]rune, 0)
-	// last char must be quote
-	if b.get(p.x-2, p.y) != '"' {
-		return true
-	}
-	var scriptLine string
-	// Scan backwards until we find the quote at the start of the command
-	for x := 0; x < width; x += 1 {
-		r := b.get(p.x-3-x, p.y)
-		if r == '"' {
-			scriptLine = string(cmd)
-			break
-		}
-		cmd = append([]rune{r}, cmd...)
-	}
-	// Now it is time run an external shell command
-	cmdLine := exec.Command("/bin/bash", "-c", scriptLine)
-	var stdout, stderr bytes.Buffer
-	cmdLine.Stdout = &stdout
-	cmdLine.Stderr = &stderr
-
-	err := cmdLine.Run() // TODO this is a blocking call - make it non-blocking
-
-	if err != nil {
-		// Check if the error is an ExitError (which indicates a non-zero exit status).
-		if exitError, ok := err.(*exec.ExitError); ok {
-			// Extract the exit code from the ExitError.
-			setMiddleMsg("error " + strconv.Itoa(exitError.ExitCode()) + " " + stderr.String())
-		} else {
-			setMiddleMsg(err.Error())
-		}
-		return true
-	}
-	// Put the results on the board
-	output := stdout.Bytes()
-	last := p.x + 1 + len(output)
-	for i := 0; i < len(output) && p.x+i < width-1; i++ {
-		if slices.Contains([]byte{'\r', '\n', '\f', '\t'}, output[i]) {
-			last = p.x + 1 + i
-			break
-		}
-		b.setC(coord{p.x + 1 + i, p.y}, int2Rune(rune2Int(rune(output[i]))))
-	}
-	b.setC(coord{last, p.y}, ';')
-
-	// Now propagate the outputs
-	for x := p.x+1 ; x < width -1; x += 1 {
-		val := b.get(x, p.y)
-		if val == ';' {
-			break
-		}
-		propagate(visited, b, p, coord{x, p.y-1}, val, multi)
-		propagate(visited, b, p, coord{x, p.y+1}, val, multi)
-	}
 
 	return false
 }
@@ -1383,7 +1371,7 @@ var renderStyle = flag.String("renderStyle", "unicode", "Render style [plain, un
 // var prof interface{ Stop() } // Keep this line
 
 func main() {
-	time.Sleep(10 * time.Second)
+	// time.Sleep(10 * time.Second)
 	//// CPUProfile enables cpu profiling. 									// Keep this lines
 	//prof = profile.Start(profile.CPUProfile, profile.ProfilePath(".")) 	// Keep this line
 
