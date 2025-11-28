@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"golang.design/x/clipboard"
 
 )
 
@@ -1301,19 +1302,36 @@ func (e *editor) copy(b board) {
 		return
 	} else {
 		// in selection mode
+		var externalClipBoard = ""
 		e.cutPasteBuffer = makeBoard(e.selectionRectangle.bottomRight.x-e.selectionRectangle.topLeft.x+1, e.selectionRectangle.bottomRight.y-e.selectionRectangle.topLeft.y+1)
 		for x := e.selectionRectangle.topLeft.x; x <= e.selectionRectangle.bottomRight.x; x++ {
 			for y := e.selectionRectangle.topLeft.y; y <= e.selectionRectangle.bottomRight.y; y++ {
-				e.cutPasteBuffer.set(coord{x - e.selectionRectangle.topLeft.x, y - e.selectionRectangle.topLeft.y}, b.get(x, y))
+				cell := b.get(x, y)
+				e.cutPasteBuffer.set(coord{x - e.selectionRectangle.topLeft.x, y - e.selectionRectangle.topLeft.y}, cell)
+				externalClipBoard += string(cell)
+				if x == e.selectionRectangle.bottomRight.x {
+					externalClipBoard += "\n"
+				}
 			}
 		}
+
 		e.ks = KeysNormal
 		cursorX = e.selectionRectangle.topLeft.x
 		cursorY = e.selectionRectangle.topLeft.y
+
+		// Write text to the external operating system clipboard
+		clipboard.Write(clipboard.FmtText, bytes.NewBufferString(externalClipBoard).Bytes())
 	}
 }
 
+func (e *editor) copyClipboard() {
+			// Read text from the operating system clipboard
+        	text := clipboard.Read(clipboard.FmtText)
+        	setMiddleMsgRaw(string(text))
+}
+
 func (e *editor) paste(b board, cursor coord) {
+	e.copyClipboard()
 	for x := 0; x < len(e.cutPasteBuffer); x++ {
 		for y := 0; y < len(e.cutPasteBuffer[x]); y++ {
 			b.set(coord{cursor.x + x, cursor.y + y}, e.cutPasteBuffer.get(x, y))
@@ -1380,6 +1398,11 @@ func main() {
 		log.Fatalf("ERROR: TERM environment variable must be set, maybe try  'TERM=xterm-256color'")
 	}
 	flag.Parse()
+
+	// Initialize the clipboard package
+	if err := clipboard.Init(); err != nil {
+		log.Fatalf("Failed to initialize clipboard: %v", err)
+	}
 
 	var err error
 	logfd, err = os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE, 0644)
