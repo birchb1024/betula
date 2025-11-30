@@ -282,8 +282,51 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		}
 
 	case '-':
-		leftRight := wire{[]coord{{p.x + 1, p.y}, {p.x - 1, p.y}}}
-		leftRight.propagate(visited, b, p, value, multi)
+		//         .
+		//        .-.
+		//         .
+		north := coord{p.x, p.y - 1}
+		south := coord{p.x, p.y + 1}
+		if (f == north || f == south) && b.getC(north) == '|' && b.getC(south) == '|'{
+			// signal coming from north or south and it's a level crossing, propagate north-south also
+			//         |
+			//        .-.
+			//         |
+			propDirection := south
+			if f == south {
+				propDirection = north
+			}
+			propagate(visited, b, p, propDirection, value, multi)
+			return
+		}
+		east := coord{p.x - 1, p.y}
+		west := coord{p.x + 1, p.y}
+		if f == west && b.getC(east) == '|' {
+			//
+			//        |-
+			//
+			propagate(visited, b, p, coord{p.x-2, p.y}, value, multi)
+			return
+		}
+		if f == east && b.getC(west) == '|' {
+			//
+			//        -|
+			//
+			propagate(visited, b, p, coord{p.x+2, p.y}, value, multi)
+			return
+		}
+		if f.x < p.x {
+			// simple wire, no crossover
+			// propagate west to east
+			propagate(visited, b, p, coord{p.x+1, p.y}, value, multi)
+			return
+		}
+		if f.x > p.x {
+			// simple wire, no crossover
+			// propagate east to west
+			propagate(visited, b, p, coord{p.x-1, p.y}, value, multi)
+			return
+		}
 
 	case '|':
 		//         .
@@ -294,14 +337,14 @@ func propagate(visited visitors, b board, f coord, p coord, value rune, multi ma
 		up := coord{p.x, p.y - 1}
 		down := coord{p.x, p.y + 1}
 		if (f == left || f == right) && b.getC(left) == '-' && b.getC(right) == '-' {
+			// signal coming from left or right and is a level crossing
 			//
-			//    -|-        must be crossing wires to prevent stack overflow
+			//    -|-
 			//
-			// if signal is left<>right then pass through horizontally
-			leftRightUnder := wire{[]coord{right, left}}
-			for _, out := range leftRightUnder.outputs {
-				propagate(visited, b, p, out, value, multi)
-			}
+			// pass through horizontally using a temporary wire
+			templeftRightWire := wire{[]coord{right, left}}
+			templeftRightWire.propagate(visited, b, left, value, multi)
+			templeftRightWire.propagate(visited, b, right, value, multi)
 			return
 		}
 		if f == up || f == down {

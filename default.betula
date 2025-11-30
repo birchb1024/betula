@@ -21,7 +21,7 @@
         |                 | 32C1  3                                          4 3                     1*1                                        
         |32C1 9           @---S---L                                                              14C--S--J                                      
         @--S--L                3            1      1                                                 0 0 0                                      
-            9                             2CL   32CL       _SPDT Relay_                                                           g             
+            9                             2CL   32CL       _SPDT Relay_                                                           h             
                              1*1  c        |      |          52C-N                                                                L             
                        1gC----S---L        N      N            | |                                                              00C---@         
                              c c           |0     |0           |1|                                                                    | 0       
@@ -33,7 +33,7 @@
       32C->-L 32CL<-J       3*@--|--S-L                                          3*--S---@          |   |                                       
                               |  N03 3                                              3               |  2*                                       
                               @--S----L                                                             |                                           
-          10C   g 00C           3                                                    9R           33C---@             3*--@                     
+          10C   h 00C           3                                                    9R           33C---@             3*--@                     
         L->-@   L-<-@                                                                 | 0_Equals_   |   |   0             |   0                 
                                     _Random_                                         0=-L           |  0=---L            0=---L                 
         C      C                                                                      |             |   |                 |                     
@@ -57,3 +57,14 @@
                                                                                       1*----S---L-----Z----|----@                               
                                                                                            1 1        |0   |                                    
                                                                                                       @----@                                    
+_crossings_                                                                                                                                     
+                                                                                                                                                
+                                                                              _Lamp not propogating over crossing_                              
+                                                                                                                                                
+     n*           s                      s                       s             L          L            L           L          L            L    
+      |           L          n*          L           n*          L             |          | 2R         O        111|          | 2R         K    
+      |  e    w   | w         | e    w   | w          |          |        2RIII|OON@   OOO|OOO     L-----L    2RLLL|LLL@   JJJ|JJJ     L-----L  
+ e*---|--L    L---|-L@   e*-----L    L-----L@2    L-----L    L-----L       |   |   |      |            O       |   |   |      |111         K1   
+      |           | w*        |          | w*         |          |         |   J   &NO    J          2R@       |   J   &NO    J          2R@    
+      J          s*           J         s*            J         s*         |       |                           |       |                        
+      n                       n                       n                    @-------@                           @-------@                        
