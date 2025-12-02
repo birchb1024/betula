@@ -1,0 +1,18 @@
+_Test the 7-segement macro_                                                                                
+                                                                                                           
+   M7-segment      M7-segment        M7-segment      M7-segment        M7-segment      M7-segment          
+                                                                                                           
+    @--OOOOOOOO     @--OOOOOOOO       @--OOOOOOOO     @--OOOOOOOO       @--OOOOOOOO     @--OOOOOOOO        
+    | Q        Q    | Q        Q      | Q        Q    | Q        Q      | Q        Q    | Q        Q       
+    | Q        Q    | Q        Q      | Q        Q    | Q        Q      | Q        Q    | Q        Q       
+    | Q        Q    | Q        Q      | Q        Q    | Q        Q      | Q        Q    | Q        Q       
+    |@Q        Q-@  |@Q        Q-@    |@Q        Q-@  |@Q        Q-@    |@Q        Q-@  |@Q        Q-@     
+    || OOOOOOOO-@|  || OOOOOOOO-@|    || OOOOOOOO-@|  || OOOOOOOO-@|    || OOOOOOOO-@|  || OOOOOOOO-@|     
+    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||     
+    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||     
+    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||     
+    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||    ||Q        Q||  ||Q        Q||     
+    |||OOOOOOOO|||  |||OOOOOOOO|||    |||OOOOOOOO|||  |||OOOOOOOO|||    |||OOOOOOOO|||  |||OOOOOOOO|||     
+    |||   |    |||  |||   |    |||    |||   |    |||  |||   |    |||    |||   |    |||  |||   |    |||     
+    |||   |    |||  |||   |    |||    |||   |    |||  |||   |    |||    |||   |    |||  |||   |    |||     
+ 42C@@@---@----@@@--@@@---@----@@@----@@@---@----@@@--@@@---@----@@@----@@@---@----@@@--@@@---@----@@@-----

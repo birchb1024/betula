@@ -1128,6 +1128,11 @@ func (b board) off(x int, y int) bool {
 	return false
 }
 
+// on() - Are we on the board?
+func (b board) on(x int, y int) bool {
+	return !b.off(x, y)
+}
+
 type allAboutRune struct {
 	evaluate      func(visited visitors, b board, p coord, f coord, value rune, multi map[coord]int) bool
 	valuesOverlay []coord // values - for clean deletion
@@ -1488,6 +1493,7 @@ func main() {
 		height = screenHeight
 		theBoard = makeBoard(width, height)
 	}
+
 	quit := func() {
 		s.Fini()
 		s.EnableMouse()
@@ -1681,16 +1687,28 @@ func main() {
 				case 'R':
 					cursorX -= 1
 				case '|':
-					if nonValue(theBoard[cursorX][cursorY+1]) {
-						cursorY += 1
-					} else if nonValue(theBoard[cursorX][cursorY-1]) {
+					if theBoard.on(cursorX, cursorY+1) {
+						if nonValue(theBoard[cursorX][cursorY+1]) {
+							cursorY += 1
+							break
+						}
+					}
+					if theBoard.on(cursorX, cursorY-1) {
+						if nonValue(theBoard[cursorX][cursorY-1]) {
 						cursorY -= 1
+						}
 					}
 				case '-':
-					if nonValue(theBoard[cursorX+1][cursorY]) {
-						cursorX += 1
-					} else if nonValue(theBoard[cursorX-1][cursorY]) {
-						cursorX -= 1
+					if theBoard.on(cursorX+1, cursorY) {
+						if nonValue(theBoard[cursorX+1][cursorY]) {
+							cursorX += 1
+							break
+						}
+					}
+					if theBoard.on(cursorX-1, cursorY) {
+						if nonValue(theBoard[cursorX-1][cursorY]) {
+							cursorX -= 1
+						}
 					}
 				default:
 					cursorX += 1
