@@ -5,7 +5,7 @@ A live-coding logic simulation with a text user interface
 go build -gcflags="all=-N -l" && ./betula clock.betula ; stty sane ; tset
 ```
 
-Screencast video here: https://asciinema.org/a/447367
+Screencast videos here: [![asciicast](https://asciinema.org/a/hKXqGpfb85gnNFby96F1uPZhK.svg)](https://asciinema.org/a/hKXqGpfb85gnNFby96F1uPZhK) and here: [![asciicast](https://asciinema.org/a/439857.svg)](https://asciinema.org/a/439857)
 
 # Cell Value types
 
