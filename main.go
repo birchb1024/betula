@@ -650,9 +650,14 @@ func evalClock(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[coord]int) bool {
 	//
 	//
-	// "some script"3$xxxxxxxxxxxxxxxxxxxxxxxxxxx
+	// "some script"3$
+	//               x
+	//               x
+	//               x
+	//               ;
 	//
 	//
+	var quote = '_'
 	if visited.yes(p) {return true }
 
 	fraction := 4
@@ -669,14 +674,14 @@ func evalShell(visited visitors, b board, p coord, _ coord, _ rune, multi map[co
 		// Scan the board for the command script
 		var cmd = make([]rune, 0)
 		// last char must be quote
-		if b.get(p.x-2, p.y) != '"' {
+		if b.get(p.x-2, p.y) != quote {
 			return true
 		}
 		var scriptLine string
 		// Scan backwards until we find the quote at the start of the command
 		for x := 0; x < width; x += 1 {
 			r := b.get(p.x-3-x, p.y)
-			if r == '"' {
+			if r == quote {
 				scriptLine = string(cmd)
 				break
 			}
@@ -882,6 +887,9 @@ func interpreter(b board) {
 		for y := 0; y < height-1; y++ {
 			for x := 0; x < width; x++ {
 				switch b[x][y] {
+				case '_':
+					// skip over comments
+					x = b.findCommentEnd('_', x+1, y) + 1
 				case 'M':
 					// collect the name
 					name := make([]rune, width)
@@ -909,8 +917,6 @@ func interpreter(b board) {
 				switch b.get(x, y) {
 				case '_':
 					x = b.findCommentEnd('_', x+1, y) + 1
-				case '"':
-					x = b.findCommentEnd('"', x+1, y) + 1
 				case 'H':
 					b.set(coord{x - 1, y}, ' ')
 				case 'I':

@@ -1,66 +1,66 @@
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                           _OK_        _OK                             
-                                                                                                                         s                             
-                                                                                                            n*           L                             
-                                                                                                             |       w   | w                           
-                                                                                                             |  e    L---|-L@                          
-                                                                                                        e*---|--L        | w*                          
-                                                                                                             |          s*                             
-                                                                                                             J                                         
-                                                                                                             n                                         
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                                        s                              
-                                                                                                            n*          L                              
-                                                                                                             | e    w   | w                            
-                                                                                                        e*-----L    L-----L@2                          
-                                                                                                             |          | w*                           
-                                                                                                             J         s*                              
-                                                                                                             n                                         
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                          _BUG vertical progration going horizontal_   
-                                                                                                                                                       
-                                                                                                            zC          L                              
-                                                                                                             |          |                              
-                                                                                                         L-----L    L-----L                            
-                                                                                                             |          |                              
-                                                                                                             J          *                              
-                                                                                                             g                                         
-                                                                                                                                                       
-                                                                                                            _OK Mid Lamp not propogating over crossing_
-                                                                                                                                                       
-                                                                                                             L          L            L                 
-                                                                                                             |          | 2R         O                 
-                                                                                                        2ROOO|OON@   OOO|III     L-----L               
-                                                                                                         |   |   |      |            O                 
-                                                                                                         |   J   &NO    J          2R@                 
-                                                                                                         |       |                                     
-                                                                                                         @-------@                                     
-                                                                                                                                                       
-                                                                                                                                                       
-                                                                                                          32C1                                         
-                                                                                                          g*S--@                                       
-                                                                                                           g g |                                       
-                                                                                                     32C1      |                                       
-                                                                                                     u*S-----@ |                                       
-                                                                                                      u u    | |                                       
-                                                                                                32C1         | |                                       
-                                                                                                b*S--------J J J                                       
-                                                                                                 b b       b u g                                       
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                           _OK_        _OK                                                                        
+                                                                                                                         s                                                                        
+                                                                                                            n*           L                                                                        
+                                                                                                             |       w   | w                                                                      
+                                                                                                             |  e    L---|-L@                                                                     
+                                                                                                        e*---|--L        | w*                                                                     
+                                                                                                             |          s*                                                                        
+                                                                                                             J                                                                                    
+                                                                                                             n                                                                                    
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                                        s                                                                         
+                                                                                                            n*          L                                                                         
+                                                                                                             | e    w   | w                                                                       
+                                                                                                        e*-----L    L-----L@2                                                                     
+                                                                                                             |          | w*                                                                      
+                                                                                                             J         s*                                                                         
+                                                                                                             n                                                                                    
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                              _PASS macros from comments_                               _PASS  vertical progration going horizontal_                                              
+                                                                                                                                                                                                  
+                                                 _M7-segment _                                              zC          L                                                            _M7-segment _
+                                                                                                             |          |                                                                         
+                                                                                                         L-----L    L-----L                                                                       
+                                                                                                             |          |                                                                         
+                                                                                                             J          *                                                                         
+                                                                                                             6                                                                                    
+                                                                                               5    5                                                                                             
+                                                                                         5*---Z-----L       _OK mid Lamp not propogating over crossing_                                           
+                                                                                              |1                                                                                                  
+                                                                                              |              L          L            L                                                            
+                                                                                              C              |          | 2R         O                                                            
+                                                                                              |         2ROOO|OON@   OOO|III     L-----L                                                          
+                                                                                              |0         |   |   |      |            I                                                            
+                                                                                         8*---S-----L    |   J   &NO    J          2R@                                                            
+                                                                                             80          |       |                                                                                
+                                                                                                         @-------@                                                                                
+                                                                                                                                                                                                  
+                                                                                                                                                                                                  
+                                                                                                          32C0                                                                                    
+                                                                                          5  5     5*     g*S--@                                                                                  
+                                                                                          L---Z-----@      g0  |                                                                                  
+                                                                                              |1     32C0      |                                                                                  
+                                                                                              |      u*S-----@ |                                                                                  
+                                                                                              C       u0     | |                                                                                  
+                                                                                              | 32C0         | |                                                                                  
+                                                                                              |0b*S8*------J J J                                                                                  
+                                                                                          L---S--b0 @      8                                                                                      
